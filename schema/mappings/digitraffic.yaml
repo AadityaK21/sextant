@@ -1,0 +1,78 @@
+# Fintraffic Digitraffic — the JSON REST connector.
+#
+# Free, no API key. Send a Digitraffic-User header identifying your app; it is
+# requested by their terms of service.
+#
+# The port-calls endpoint is the reason this domain was chosen: it IS the
+# Voyage entity, with departs_from and arrives_at already implied. You are not
+# inventing a link type to have something to traverse.
+#
+# REPRODUCIBILITY RULE (docs/EXECUTION_PLAN.md, day 7): snapshot every response
+# to data/snapshots/digitraffic/<batch_id>/ on first fetch and replay from disk
+# afterwards. Your build must not depend on a live network, and lineage that
+# points at a response you can no longer produce is not lineage.
+
+source:
+  id: digitraffic
+  name: Fintraffic Digitraffic (marine)
+  connector: http
+  base_url: https://meri.digitraffic.fi
+  headers:
+    Digitraffic-User: "sextant/0.1"
+  snapshot_dir: data/snapshots/digitraffic
+  trust: 0.85
+
+endpoints:
+  - id: port_calls
+    path: /api/port-call/v1/port-calls
+    records_at: "portCalls"
+  - id: ports
+    path: /api/port-call/v1/ports
+  - id: vessel_details
+    path: /api/port-call/v1/vessel-details
+  - id: ais_vessels
+    path: /api/ais/v1/vessels
+  - id: ais_locations
+    path: /api/ais/v1/locations
+
+mappings:
+  - target_type: Port
+    from_endpoint: ports
+    natural_key: ["locode"]
+    properties:
+      name:    { from: "portName", transform: [trim, collapse_ws, title_case] }
+      locode:  { from: "locode",   transform: [trim, upper, validate_locode] }
+      country: { from: "country",  transform: [trim, upper] }
+
+  - target_type: Vessel
+    from_endpoint: vessel_details
+    natural_key: ["mmsi"]
+    properties:
+      name:          { from: "name",         transform: [trim, collapse_ws] }
+      imo:           { from: "imo",          transform: [to_string, validate_imo] }
+      mmsi:          { from: "mmsi",         transform: [to_string] }
+      call_sign:     { from: "callSign",     transform: [trim, upper] }
+      ship_type:     { from: "vesselTypeCode", transform: [to_int] }
+      gross_tonnage: { from: "grossTonnage", transform: [to_int] }
+      # MMSI's first three digits are the MID, which encodes the flag state.
+      # Deriving flag from it and cross-checking against the declared flag is a
+      # free consistency signal for the resolver.
+      flag:          { from: "mmsi",         transform: [to_string, mid_to_country] }
+
+  - target_type: Voyage
+    from_endpoint: port_calls
+    natural_key: ["portCallId"]
+    properties:
+      voyage_ref:  { from: "portCallId",              transform: [to_string] }
+      arrived_at:  { from: "portAreaDetails[0].ata",  transform: [parse_timestamp] }
+      departed_at: { from: "portAreaDetails[0].atd",  transform: [parse_timestamp] }
+    links:
+      - type: arrives_at
+        to_type: Port
+        via: { from: "portToVisit", match_property: locode }
+      - type: departs_from
+        to_type: Port
+        via: { from: "prevPort", match_property: locode }
+      - type: operated_by
+        to_type: Vessel
+        via: { from: "mmsi", match_property: mmsi }

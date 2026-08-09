@@ -1,0 +1,79 @@
+# The ontology.
+#
+# This file is the contract between the data and the rest of the system. It is
+# declarative on purpose:
+#   * a domain expert can add an entity type without a code review
+#   * the React frontend reads it from /api/ontology and renders generically,
+#     so adding a type here makes it appear in the UI with zero frontend code
+#   * schema versions can be diffed and reviewed like any other artifact
+#   * `time_index:` on a link declaration is what causes the TIDX keyspace to
+#     be populated — declarative physical layout, not a hardcoded index
+#
+# See docs/ARCHITECTURE.md §6.
+
+version: 1
+namespace: maritime
+
+entity_types:
+
+  Port:
+    description: A place where vessels call. The hardest thing in this dataset
+      to resolve, because it appears as "Rotterdam", "ROTTERDAM", "Port of
+      Rotterdam" and "NLRTM" across four sources.
+    properties:
+      name:        { type: string,   title: true,   fuse: most_trusted }
+      locode:      { type: string,   indexed: true, unique_hint: true, fuse: most_trusted,
+                     validate: locode_format }
+      alt_names:   { type: string[], fuse: union }
+      country:     { type: string,   indexed: true, fuse: most_frequent }
+      lat:         { type: double,   fuse: numeric_median }
+      lon:         { type: double,   fuse: numeric_median }
+      harbor_size: { type: enum, values: [V, L, M, S], fuse: most_trusted }
+    display: "{name} ({locode})"
+
+  Vessel:
+    description: A hull. Note the identifier asymmetry encoded in the resolver
+      config - IMO is permanent for the life of the hull, MMSI is tied to the
+      radio licence and is REASSIGNED on reflagging.
+    properties:
+      name:          { type: string, title: true, fuse: most_recent }
+      imo:           { type: string, indexed: true, unique_hint: true,
+                       validate: imo_checksum }
+      mmsi:          { type: string, indexed: true }
+      call_sign:     { type: string }
+      flag:          { type: string, indexed: true, fuse: most_recent }
+      ship_type:     { type: int }
+      gross_tonnage: { type: int, fuse: most_trusted }
+    display: "{name} [IMO {imo}]"
+
+  Voyage:
+    description: One vessel movement between two ports. Digitraffic port-calls
+      map onto this almost directly.
+    properties:
+      voyage_ref:  { type: string, title: true }
+      departed_at: { type: timestamp, indexed: true }
+      arrived_at:  { type: timestamp, indexed: true }
+      cargo:       { type: string }
+    display: "{voyage_ref}"
+
+link_types:
+
+  departs_from:
+    from: Voyage
+    to: Port
+    cardinality: many_to_one
+    inverse: departures
+    time_index: departed_at     # -> populates TIDX, see docs/ARCHITECTURE.md §5
+
+  arrives_at:
+    from: Voyage
+    to: Port
+    cardinality: many_to_one
+    inverse: arrivals
+    time_index: arrived_at      # this is what makes the quarter-query a range scan
+
+  operated_by:
+    from: Voyage
+    to: Vessel
+    cardinality: many_to_one
+    inverse: voyages

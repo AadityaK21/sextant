@@ -1,0 +1,31 @@
+# Postgres backs the third connector.
+#
+# The framing matters for the interview: in any real integration project the
+# third source is somebody's operational warehouse, not a file. Loading a slice
+# of MarineCadastre AIS in here gives you a genuinely different shape from the
+# CSV and the REST API — MMSI-keyed rows with no IMO, a USCG vessel-type
+# taxonomy instead of the AIS one, and US port naming conventions. All three
+# are duplication generators, which is exactly what the resolver needs to earn
+# its keep.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sextant-postgres
+    environment:
+      POSTGRES_USER: sextant
+      POSTGRES_PASSWORD: sextant
+      POSTGRES_DB: maritime
+    ports:
+      - "5433:5432"          # 5433 on the host, to avoid clashing with a local Postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./schema/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sextant -d maritime"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

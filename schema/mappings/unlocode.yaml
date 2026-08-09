@@ -1,0 +1,35 @@
+# UN/LOCODE — UNECE's code list. The CSV bulk-dump connector, source two.
+#
+# Roughly 110,000 locations, of which only the ones whose Function bitfield has
+# position 1 set are seaports. Filtering on that is itself a nice piece of
+# domain handling to be able to explain.
+#
+# Messiness this source contributes:
+#   * names carry diacritics; a NameWoDiacritics column sits alongside
+#   * coordinates are in degree-minute-hemisphere text ("5155N 00430E"),
+#     not decimal — hence the ddmm_to_decimal transform
+#   * the same physical port often has several sub-location entries
+#
+# Highest trust of any source for `locode`: this IS the code authority.
+
+source:
+  id: unlocode
+  name: UNECE UN/LOCODE
+  connector: csv
+  uri: data/snapshots/unlocode/code-list.csv
+  natural_key: ["Country", "Location"]
+  trust: 0.95
+  filter:
+    # Function is a positional bitfield; '1' in position 1 means seaport.
+    - column: "Function"
+      matches: "^1"
+
+mappings:
+  - target_type: Port
+    properties:
+      name:      { from: "NameWoDiacritics", transform: [trim, collapse_ws, title_case] }
+      alt_names: { from: "Name",             transform: [trim] }
+      locode:    { from: ["Country", "Location"], transform: [concat, upper, validate_locode] }
+      country:   { from: "Country",          transform: [trim, upper] }
+      lat:       { from: "Coordinates",      transform: [ddmm_to_decimal_lat] }
+      lon:       { from: "Coordinates",      transform: [ddmm_to_decimal_lon] }

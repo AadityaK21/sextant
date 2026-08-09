@@ -1,0 +1,32 @@
+# NGA World Port Index (Pub 150) — the CSV bulk-dump connector.
+#
+# Messiness this source contributes:
+#   * port names in ALL CAPS
+#   * a separate "Alternate Port Name" column
+#   * patchy UN/LOCODE coverage — many rows have none
+#   * its own harbour-size taxonomy
+#
+# `trust` is the source-level weight consumed by the `most_trusted` fusion
+# rule. WPI is authoritative on geography and harbour characteristics but NOT
+# on codes, which is why unlocode.yaml carries a higher trust and wins the
+# locode property. Encoding "which source is right about what" as a number per
+# source is a simplification; a production system would carry it per property.
+
+source:
+  id: wpi
+  name: NGA World Port Index (Pub 150)
+  connector: csv
+  uri: data/snapshots/wpi/UpdatedPub150.csv
+  natural_key: ["World Port Index Number"]
+  trust: 0.80
+
+mappings:
+  - target_type: Port
+    properties:
+      name:        { from: "Main Port Name",      transform: [trim, collapse_ws, title_case] }
+      alt_names:   { from: "Alternate Port Name", transform: [trim, split_semicolon] }
+      locode:      { from: "UN/LOCODE",           transform: [trim, upper, validate_locode] }
+      country:     { from: "Country Code",        transform: [trim, upper] }
+      lat:         { from: "Latitude",            transform: [to_double] }
+      lon:         { from: "Longitude",           transform: [to_double] }
+      harbor_size: { from: "Harbor Size",         transform: [trim, upper, first_char] }

@@ -1,0 +1,31 @@
+build/
+cmake-build-*/
+.cache/
+compile_commands.json
+
+# data — fetched, not committed (except small samples under data/snapshots/sample/)
+data/raw/
+data/snapshots/*
+!data/snapshots/sample/
+*.zip
+*.gz
+*.zst
+
+# database files produced by the engine
+*.sst
+*.log
+MANIFEST-*
+CURRENT
+LOCK
+testdb/
+/tmp_*
+
+# node
+web/node_modules/
+web/dist/
+.env
+
+# editors / os
+.vscode/
+.idea/
+.DS_Store
