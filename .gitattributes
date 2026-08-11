@@ -1,0 +1,33 @@
+# Line-ending policy.
+#
+# Git on Windows converts LF to CRLF on checkout by default. That is fine for
+# C++ sources, but it silently breaks two things:
+#
+#   * shell scripts — a CRLF shebang fails on Linux with the memorable and
+#     unhelpful "bad interpreter: /usr/bin/env bash^M"
+#   * anything a Linux container reads verbatim
+#
+# Since CI builds on Linux, Windows and macOS from this one tree, the files
+# that must stay LF are pinned here rather than left to each developer's
+# core.autocrlf setting.
+
+* text=auto
+
+*.sh       text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+Dockerfile text eol=lf
+
+*.cpp text
+*.h   text
+*.txt text
+*.md  text
+*.cmake text
+
+*.png  binary
+*.jpg  binary
+*.pdf  binary
+*.zip  binary
+*.gz   binary
+*.zst  binary
+*.sst  binary
