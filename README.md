@@ -109,8 +109,8 @@ Filled in as milestones land. Every number here is reproducible with a command.
 
 | | |
 |---|---|
-| Storage engine | 805k writes/sec · p99 read **2.18 µs** · [full benchmarks](docs/BENCH.md) |
-| Correctness | 67 tests green · clean under ASan + UBSan · lock-free skiplist clean under ThreadSanitizer |
+| Storage engine | 1.1M batched writes/sec · p99 read **2.10 µs** · [full benchmarks](docs/BENCH.md) |
+| Correctness | 67 tests green on Linux, Windows and macOS · clean under ASan + UBSan · lock-free skiplist clean under ThreadSanitizer |
 | | Differential test: 60k random ops vs `std::map`, including across recovery boundaries |
 | | Torn-WAL recovery: every acknowledged write survives a truncated log tail |
 | Entity resolution | *day 10* — F1 on a held-out labeled set |

@@ -16,47 +16,79 @@ than one number with no context.
 
 ## Day 1 — memtable + WAL, no SSTables
 
-200,000 entries · 100-byte values · GCC 11.4 · `-O2` · Linux container
+200,000 entries · 100-byte values
 
-| Benchmark | Throughput | Notes |
+| Benchmark | Windows · MSVC · NVMe | Linux container · GCC 11.4 |
 |---|---|---|
-| `fillseq` (sync=false) | **805,633 ops/sec** · 89 MB/s | one `Put` per call |
-| `fillbatch` (1000/batch) | **1,537,945 ops/sec** · 170 MB/s | ~1.9× faster than unbatched |
-| `fillsync` (sync=true) | **655 ops/sec** · 0.07 MB/s | one `fsync` per write |
-| `readrandom` | **1,051,688 ops/sec** | mean 0.85 µs · p50 0.75 · p99 **2.18 µs** |
-| `readmissing` | **6,718,144 ops/sec** | mean 0.13 µs — no key comparison on miss |
-| recovery (WAL replay) | **0.211 s** | 202,200 records, 402,000 sequence numbers |
+| `fillseq` (sync=false) | 181,708 ops/sec | **805,633 ops/sec** |
+| `fillbatch` (1000/batch) | **1,108,510 ops/sec** | **1,537,945 ops/sec** |
+| `fillsync` (sync=true) | **3,003 ops/sec** | 655 ops/sec |
+| `readrandom` | 879,015 ops/sec · p99 **2.10 µs** | 1,051,688 ops/sec · p99 2.18 µs |
+| `readmissing` | 4,113,517 ops/sec · p99 0.30 µs | 6,718,144 ops/sec · p99 0.14 µs |
+| recovery (WAL replay) | 0.281 s / 202,200 records | 0.211 s / 202,200 records |
+
+Two platforms is not padding. The *differences* between them are the most
+informative thing on this page.
 
 ## What these numbers actually tell you
 
-**`fillsync` is 1,230× slower than `fillseq`.** That single ratio is the whole
-argument for group commit, and it is worth being able to state precisely: an
-`fsync` is a device round-trip, and no amount of CPU optimisation touches it.
-It is also why bulk ingest runs with `sync=false` plus one explicit sync per
-batch — the source data is replayable, so the durability guarantee you need
-during ingest is weaker than the one you need for an online write.
+**Batching is 6.1× on Windows but only 1.9× on Linux.** Same source, same
+benchmark. The cause is `Writer::EmitPhysicalRecord`, which calls `Flush()`
+after every physical record — pushing the CRT's userspace buffer into the OS.
+That call is markedly more expensive in the MSVC runtime than in glibc, so
+Windows pays a much higher per-record toll, and batching (one WAL record for
+1,000 keys instead of 1,000 records) removes proportionally more of it.
 
-**Batching is only ~1.9× faster than unbatched at `sync=false`.** Modest,
-because with no `fsync` in the loop the cost is dominated by memtable insertion
-rather than log framing. The gap widens enormously with `sync=true`, where one
-batch costs one fsync instead of N.
+This is the single best observation in the day-1 numbers, because it is not
+about the algorithm at all — it is about a library call the algorithm makes.
+The general lesson is that *per-operation overhead is a platform property*, and
+you cannot reason about it from the source alone. You have to measure on the
+machine you care about.
 
-**`readmissing` is 6× faster than `readrandom`.** Today that is just "the
-skiplist search terminates early and no value is copied". After day 3 this line
-becomes the *bloom filter* line, and the interesting number will be how many
-disk reads it avoids. Record it now so the comparison exists.
+**`fillsync` is 60× slower than `fillseq` on Windows, and 1,230× slower on the
+Linux container.** Both ratios are correct and neither is the "real" one. The
+Windows figure is a genuine NVMe device round-trip. The container figure is a
+round-trip *through an overlay filesystem*, which is far slower — an artefact
+of where it ran, not of the engine. Knowing which of your numbers describe your
+code and which describe your environment is most of what reading a benchmark
+honestly consists of.
 
-**p99 read is 2.18 µs against a mean of 0.85 µs.** That tail is skiplist level
-traversal plus cache misses. The `max` of 224 µs is a scheduler artefact, not
-the engine — worth saying, because knowing which outliers are yours and which
-are the OS is part of reading a benchmark honestly.
+Either way, the conclusion for the engine is identical: an `fsync` is a device
+round-trip, no amount of CPU optimisation touches it, and that is the entire
+argument for group commit. It is also why bulk ingest runs `sync=false` plus one
+explicit sync per batch — source data is replayable, so ingest needs a weaker
+durability guarantee than an online write does.
 
-**Recovery replays 202,200 records in 0.21 s** — about 960k records/sec, close
-to the write path's own throughput, which is what you would expect since replay
-is the same memtable insert without the log append. This number will get *worse*
-in a good way once SSTables exist: the WAL only needs to hold writes since the
-last flush, so replay time becomes bounded by `write_buffer_size` rather than by
-total data volume.
+**`readmissing` is 4–6× faster than `readrandom`.** Today that is only "the
+skiplist search terminates early and no value gets copied". After day 3 this
+becomes the *bloom filter* line, and the interesting quantity will be how many
+disk reads it avoids. Recorded now so the comparison exists later.
+
+**p99 read is ~2.1 µs against a mean of ~1 µs on both platforms.** That tail is
+skiplist level traversal plus cache misses, and its consistency across two very
+different machines suggests it is a property of the data structure rather than
+the hardware. The `max` values (331 µs and 224 µs) are scheduler preemption,
+not the engine.
+
+**Recovery replays 202,200 records in 0.21–0.28 s** — roughly 750k–960k
+records/sec, close to the write path's own throughput, which is what you would
+expect: replay is the same memtable insert without the log append. This number
+will get *better* once SSTables exist, because the WAL will only hold writes
+since the last flush. Replay time becomes bounded by `write_buffer_size`
+instead of by total data volume.
+
+## Known inefficiency, deliberately not yet fixed
+
+`EmitPhysicalRecord` flushes once per *physical* record. For a record split
+across N blocks that is N flushes where one would do. Fixing it means moving the
+flush up into `AddRecord`, which is a genuine improvement for large values.
+
+It is left in place for now because the flush is load-bearing for the stated
+durability contract — `sync=false` promises "survives a process crash", which
+requires the bytes to have reached the OS page cache before `Put` returns.
+Removing it entirely would quietly weaken that promise. This is a real trade
+rather than an oversight, which is why it is written down rather than silently
+patched.
 
 ---
 

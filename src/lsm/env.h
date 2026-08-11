@@ -70,10 +70,26 @@ class SequentialFile {
 
 // --- filesystem helpers ----------------------------------------------------
 
+// NAMING HAZARD, learned the hard way — see docs/BUGS.md.
+//
+// <windows.h> defines a family of API names as PREPROCESSOR MACROS that expand
+// to an -A or -W suffixed variant:
+//     #define DeleteFile     DeleteFileW
+//     #define CreateDirectory CreateDirectoryW
+//     #define GetMessage      GetMessageW      ... and dozens more
+//
+// A macro ignores namespaces. So `sextant::lsm::DeleteFile` defined in a
+// translation unit that includes <windows.h> becomes `DeleteFileW`, while every
+// caller that never included <windows.h> still references `DeleteFile`. The
+// result is a link error that names a function you can see with your own eyes,
+// which is why it reads as nonsense at first.
+//
+// Hence RemoveFile, not DeleteFile. Before adding a function here, check it
+// against the Win32 macro list.
 bool FileExists(const std::string& fname);
 Status CreateDir(const std::string& dirname);
 Status GetFileSize(const std::string& fname, uint64_t* size);
-Status DeleteFile(const std::string& fname);
+Status RemoveFile(const std::string& fname);
 Status GetChildren(const std::string& dir, std::vector<std::string>* result);
 
 // Truncate a file to n bytes. Used by the crash-simulation tests to

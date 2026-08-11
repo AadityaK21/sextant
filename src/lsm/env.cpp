@@ -4,8 +4,14 @@
 #include <cstring>
 
 #if defined(_WIN32)
+// NOMINMAX: <windows.h> defines min/max as macros, which breaks std::min and
+// std::max in any translation unit that sees it. WIN32_LEAN_AND_MEAN drops the
+// parts of the Win32 API we do not use and roughly halves the parse time.
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
 #include <direct.h>
-#include <io.h>
+#include <fcntl.h>   // _O_RDWR, _O_BINARY
+#include <io.h>      // _open, _close, _commit, _chsize_s, _access
 #include <windows.h>
 #else
 #include <dirent.h>
@@ -133,7 +139,7 @@ Status GetFileSize(const std::string& fname, uint64_t* size) {
   return Status::OK();
 }
 
-Status DeleteFile(const std::string& fname) {
+Status RemoveFile(const std::string& fname) {
   if (std::remove(fname.c_str()) != 0) return PosixError(fname, errno);
   return Status::OK();
 }

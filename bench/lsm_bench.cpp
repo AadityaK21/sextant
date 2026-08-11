@@ -31,7 +31,7 @@ void DestroyDB(const std::string& name) {
   if (GetChildren(name, &children).ok()) {
     for (const auto& c : children) {
       if (c == "." || c == "..") continue;
-      DeleteFile(name + "/" + c);
+      RemoveFile(name + "/" + c);
     }
   }
   std::remove(name.c_str());

@@ -66,7 +66,7 @@ class DifferentialTest : public ::testing::Test {
     if (GetChildren(dbname_, &children).ok()) {
       for (const auto& c : children) {
         if (c == "." || c == "..") continue;
-        DeleteFile(dbname_ + "/" + c);
+        RemoveFile(dbname_ + "/" + c);
       }
     }
     std::remove(dbname_.c_str());

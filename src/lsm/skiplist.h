@@ -33,6 +33,7 @@
 #include <atomic>
 #include <cassert>
 #include <cstdlib>
+#include <new>      // placement new
 #include <random>
 
 #include "arena.h"

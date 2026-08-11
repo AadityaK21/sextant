@@ -57,6 +57,41 @@ before the Windows CI job finds it for you.
 
 ---
 
+## windows.h macro silently renamed my function          2026-08-09
+
+**Symptom.** Linux and GCC: clean build, 67 tests green. First MSVC build:
+`LNK2019: unresolved external symbol "class Status __cdecl
+sextant::lsm::DeleteFile(...)"` from three separate translation units. The
+function was plainly there, in a file that plainly compiled.
+
+**Root cause.** `<windows.h>` defines a large family of Win32 names as
+*preprocessor macros* that expand to an `-A`/`-W` suffixed variant:
+
+```c
+#define DeleteFile      DeleteFileW
+#define CreateDirectory CreateDirectoryW
+#define GetMessage      GetMessageW
+```
+
+`env.cpp` includes `<windows.h>`, so my **definition** was preprocessed into
+`sextant::lsm::DeleteFileW`. Every caller includes only `env.h`, never
+`<windows.h>`, so their **references** stayed `sextant::lsm::DeleteFile`. Two
+different symbols, one of which nothing defines. A macro does not respect
+namespaces — that is the whole lesson.
+
+**Fix.** Renamed to `RemoveFile`, and documented the hazard at the declaration
+site so the next function added to `env.h` gets checked against the macro list.
+Also set `NOMINMAX` and `WIN32_LEAN_AND_MEAN` globally for MSVC in
+`CMakeLists.txt`, since `min`/`max` are the same class of landmine.
+
+**Lesson.** Namespaces are a *language* feature; macros run before the language
+exists. Any identifier that collides with a Win32 API name is a link-time trap
+that a Linux-only CI will never catch. This is precisely the argument for the
+three-OS build matrix in `.github/workflows/ci.yml` — it found this within
+minutes of the first Windows compile.
+
+---
+
 <!-- Add entries as you go. Suggested candidates from the plan:
      - the first tombstone resurrection you hit once SSTables land (day 2-4)
      - whatever the lineage round-trip test catches on day 11 (it will catch

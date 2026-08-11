@@ -22,7 +22,14 @@ option(SEXTANT_BUILD_BENCH  "Build benchmarks"     ON)
 option(SEXTANT_ASAN         "Enable AddressSanitizer + UBSan" OFF)
 
 if(MSVC)
-  add_compile_options(/W4 /permissive-)
+  add_compile_options(/W4 /permissive- /utf-8)
+  # MSVC deprecates fopen, strerror and friends in favour of Microsoft-only _s
+  # variants. We use the standard C library on purpose — it is what makes this
+  # build on Linux, macOS and Windows from one source tree — so the warning is
+  # noise rather than signal. NOMINMAX and WIN32_LEAN_AND_MEAN are set globally
+  # for the same reason they are set in env.cpp: <windows.h> is hostile to
+  # portable code by default.
+  add_compile_definitions(_CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN)
 else()
   add_compile_options(-Wall -Wextra -Wpedantic -Wshadow -Wno-unused-parameter)
 endif()
