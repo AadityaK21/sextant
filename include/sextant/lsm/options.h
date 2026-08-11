@@ -32,7 +32,7 @@ struct ReadOptions {
   // This matters more here than in a general-purpose store: a multi-hop graph
   // traversal touches thousands of keys over several milliseconds, and without
   // a pinned sequence number a concurrent ingest could show an entity at hop 1
-  // that has been merged away by hop 2 — inconsistent results, no error.
+  // that has been merged away by hop 2 - inconsistent results, no error.
   const Snapshot* snapshot = nullptr;
 };
 

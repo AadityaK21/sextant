@@ -10,7 +10,7 @@
 using namespace sextant::lsm;
 
 // The central property of the encoding: for fixed-width big-endian integers,
-// BYTE ORDER EQUALS NUMERIC ORDER. Everything in src/codec depends on this —
+// BYTE ORDER EQUALS NUMERIC ORDER. Everything in src/codec depends on this -
 // it is what turns "voyages into this port last quarter" into one range scan.
 TEST(Coding, Fixed64BEPreservesNumericOrderUnderMemcmp) {
   std::mt19937_64 rnd(12345);

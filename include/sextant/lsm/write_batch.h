@@ -6,7 +6,7 @@
 // directions of every LINK, the XREF entries mapping each source row to the
 // resolved entity, the secondary index entries, and one PROV record per
 // property. If a crash lands in the middle of that, the ontology is left
-// internally inconsistent — a link pointing at an entity that does not exist,
+// internally inconsistent - a link pointing at an entity that does not exist,
 // or a value with no provenance.
 //
 // WriteBatch makes the whole merge one atomic unit: one WAL record, one

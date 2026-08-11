@@ -5,7 +5,7 @@ from-scratch LSM storage engine.**
 
 > Sextant ingests maritime data from three heterogeneous sources, maps it onto a
 > declarative ontology, resolves duplicate real-world entities across sources,
-> and records — for every single property value — the exact source row and
+> and records - for every single property value - the exact source row and
 > transform chain that produced it.
 
 *A sextant fixes your position by combining several independent observations.
@@ -19,15 +19,15 @@ C++20 · React · no storage dependencies
 
 | Milestone | | |
 |---|---|---|
-| **Day 1** — memtable, WAL, recovery, snapshots | ✅ | 67 tests green |
-| Day 2 — SSTable build/read, flush to L0 | ⬜ | |
-| Day 3 — bloom filters, block cache, merging iterator | ⬜ | |
-| Day 4 — VersionSet/MANIFEST, leveled compaction | ⬜ | |
-| Day 5 — keyspace codec | ⬜ | |
-| Days 6–7 — ontology, transforms, three connectors | ⬜ | |
-| Days 8–10 — entity resolution | ⬜ | |
-| Days 11–12 — lineage, query engine, HTTP API | ⬜ | |
-| Days 13–14 — React frontend | ⬜ | |
+| **Day 1** - memtable, WAL, recovery, snapshots | ✅ | 67 tests green |
+| **Day 2** - SSTable build/read, flush to L0 | ✅ | 98 tests green |
+| Day 3 - bloom filters, block cache, merging iterator | ⬜ | |
+| Day 4 - VersionSet/MANIFEST, leveled compaction | ⬜ | |
+| Day 5 - keyspace codec | ⬜ | |
+| Days 6-7 - ontology, transforms, three connectors | ⬜ | |
+| Days 8-10 - entity resolution | ⬜ | |
+| Days 11-12 - lineage, query engine, HTTP API | ⬜ | |
+| Days 13-14 - React frontend | ⬜ | |
 
 Plan: [`docs/EXECUTION_PLAN.md`](docs/EXECUTION_PLAN.md).
 
@@ -41,7 +41,7 @@ cmake --build build -j
 cd build && ctest --output-on-failure
 ```
 
-Dependencies are fetched and version-pinned at configure time — nothing to
+Dependencies are fetched and version-pinned at configure time - nothing to
 install. Requires CMake ≥ 3.20 and a C++20 compiler.
 
 ```bash
@@ -62,14 +62,14 @@ Entities, links, provenance, secondary indexes, blocking indexes and raw records
 are all bytes in one keyspace, laid out so the access pattern each one needs is
 a *sequential range scan*.
 
-Graph traversal is not a subsystem — it is a prefix scan over
+Graph traversal is not a subsystem - it is a prefix scan over
 `LINKOUT ‖ entity ‖ link_type`. "All voyages through this port last quarter" is
-not a filter — it is a range scan over a big-endian timestamp suffix
+not a filter - it is a range scan over a big-endian timestamp suffix
 (see [ADR 0002](docs/adr/0002-big-endian-key-encoding.md)).
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│ web/       React — browse entities, links, lineage        │
+│ web/       React - browse entities, links, lineage        │
 ├──────────────────────────────────────────────────────────┤
 │ src/api/   HTTP + JSON                                    │
 │ src/query/ planner · index selection · traversal          │
@@ -77,7 +77,7 @@ not a filter — it is a range scan over a big-endian timestamp suffix
 │ src/resolve/   normalize → block → score → cluster → fuse │
 │ src/lineage/   provenance emitted at every fusion decision │
 │ src/connectors/  CSV · REST · Postgres                    │
-│ src/codec/     key encoding — the glue                    │
+│ src/codec/     key encoding - the glue                    │
 ├──────────────────────────────────────────────────────────┤
 │ src/lsm/   WAL · MemTable · SSTable · Compaction          │
 └──────────────────────────────────────────────────────────┘
@@ -89,12 +89,12 @@ Full design: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Data sources
 
-All free, all open, all genuinely messy — the duplication is real, not seeded.
+All free, all open, all genuinely messy - the duplication is real, not seeded.
 
 | Connector | Source | What it contributes |
 |---|---|---|
 | **CSV** | [UN/LOCODE](https://unece.org/trade/uncefact/unlocode) (UNECE), [NGA World Port Index](https://msi.nga.mil/Publications/WPI) | The code authority vs. the geographic authority. Diacritics, degree-minute coordinates, `ALL CAPS` names, patchy code coverage. |
-| **REST/JSON** | [Fintraffic Digitraffic](https://www.digitraffic.fi/en/marine-traffic/) | Port calls — which *are* the `Voyage` entity, with arrival/departure links already implied. Plus AIS positions and a vessel registry. |
+| **REST/JSON** | [Fintraffic Digitraffic](https://www.digitraffic.fi/en/marine-traffic/) | Port calls - which *are* the `Voyage` entity, with arrival/departure links already implied. Plus AIS positions and a vessel registry. |
 | **Postgres** | [MarineCadastre.gov AIS](https://hub.marinecadastre.gov/datasets/vessel-traffic-ais-1) (NOAA + BOEM + USCG) | MMSI-keyed rows with mostly no IMO, a different vessel-type taxonomy, US naming conventions. |
 
 ```bash
@@ -109,13 +109,14 @@ Filled in as milestones land. Every number here is reproducible with a command.
 
 | | |
 |---|---|
-| Storage engine | 1.1M batched writes/sec · p99 read **2.10 µs** · [full benchmarks](docs/BENCH.md) |
-| Correctness | 67 tests green on Linux, Windows and macOS · clean under ASan + UBSan · lock-free skiplist clean under ThreadSanitizer |
-| | Differential test: 60k random ops vs `std::map`, including across recovery boundaries |
+| Storage engine | 855k batched writes/sec · recovery bounded by buffer size, not data size · [full benchmarks](docs/BENCH.md) |
+| Correctness | 98 tests green on Linux, Windows and macOS · clean under ASan + UBSan · lock-free skiplist clean under ThreadSanitizer |
+| | Differential test: 60k random ops vs `std::map`, forced across ~40 flushes and many SSTables |
 | | Torn-WAL recovery: every acknowledged write survives a truncated log tail |
-| Entity resolution | *day 10* — F1 on a held-out labeled set |
-| Blocking | *day 8* — reduction ratio, pair completeness |
-| Lineage | *day 11* — round-trip verified for 100% of resolved properties |
+| | Block and SSTable CRCs reject single-bit corruption |
+| Entity resolution | *day 10* - F1 on a held-out labeled set |
+| Blocking | *day 8* - reduction ratio, pair completeness |
+| Lineage | *day 11* - round-trip verified for 100% of resolved properties |
 
 ### The result that matters most
 
@@ -132,12 +133,12 @@ Lineage that isn't verified is a comment. This makes it an invariant.
 Stated up front, because knowing what you didn't build is part of the design.
 
 - **No distribution.** Single node.
-- **No ML-based resolution.** A hand-tuned Fellegi–Sunter-style scorer is
+- **No ML-based resolution.** A hand-tuned Fellegi-Sunter-style scorer is
   interpretable and tunable on 500 labels; a learned model needs 10⁵ and gives
   worse lineage.
 - **No cross-entity transactions.** `WriteBatch` gives per-merge atomicity.
 - **No incremental re-resolution.** Re-ingest triggers a full re-resolve.
-  Incremental ER — especially cluster *splits* — is genuinely a research
+  Incremental ER - especially cluster *splits* - is genuinely a research
   problem.
 - **No auth or multi-tenancy.**
 

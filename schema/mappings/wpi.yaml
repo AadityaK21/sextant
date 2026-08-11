@@ -1,9 +1,9 @@
-# NGA World Port Index (Pub 150) — the CSV bulk-dump connector.
+# NGA World Port Index (Pub 150) - the CSV bulk-dump connector.
 #
 # Messiness this source contributes:
 #   * port names in ALL CAPS
 #   * a separate "Alternate Port Name" column
-#   * patchy UN/LOCODE coverage — many rows have none
+#   * patchy UN/LOCODE coverage - many rows have none
 #   * its own harbour-size taxonomy
 #
 # `trust` is the source-level weight consumed by the `most_trusted` fusion

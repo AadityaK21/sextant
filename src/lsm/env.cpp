@@ -15,6 +15,7 @@
 #include <windows.h>
 #else
 #include <dirent.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -105,6 +106,65 @@ Status SequentialFile::Skip(uint64_t n) {
   return Status::OK();
 }
 
+// --- RandomAccessFile ------------------------------------------------------
+
+Status RandomAccessFile::Open(const std::string& fname,
+                              std::unique_ptr<RandomAccessFile>* result) {
+#if defined(_WIN32)
+  const int fd = _open(fname.c_str(), _O_RDONLY | _O_BINARY);
+#else
+  const int fd = ::open(fname.c_str(), O_RDONLY);
+#endif
+  if (fd < 0) return PosixError(fname, errno);
+  result->reset(new RandomAccessFile(fd, fname));
+  return Status::OK();
+}
+
+RandomAccessFile::~RandomAccessFile() {
+  if (fd_ >= 0) {
+#if defined(_WIN32)
+    _close(fd_);
+#else
+    ::close(fd_);
+#endif
+  }
+}
+
+Status RandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
+                              char* scratch) const {
+  // pread / _lseeki64+_read on a private fd: no shared file position is
+  // mutated, so concurrent readers do not interfere. Using fseek+fread here
+  // would be a data race waiting to happen.
+#if defined(_WIN32)
+  if (_lseeki64(fd_, static_cast<__int64>(offset), SEEK_SET) < 0) {
+    *result = Slice(scratch, 0);
+    return PosixError(filename_, errno);
+  }
+  const int r = _read(fd_, scratch, static_cast<unsigned int>(n));
+  if (r < 0) {
+    *result = Slice(scratch, 0);
+    return PosixError(filename_, errno);
+  }
+  *result = Slice(scratch, static_cast<size_t>(r));
+  return Status::OK();
+#else
+  ssize_t total = 0;
+  while (static_cast<size_t>(total) < n) {
+    const ssize_t r = ::pread(fd_, scratch + total, n - static_cast<size_t>(total),
+                              static_cast<off_t>(offset) + total);
+    if (r < 0) {
+      if (errno == EINTR) continue;
+      *result = Slice(scratch, 0);
+      return PosixError(filename_, errno);
+    }
+    if (r == 0) break;  // end of file
+    total += r;
+  }
+  *result = Slice(scratch, static_cast<size_t>(total));
+  return Status::OK();
+#endif
+}
+
 // --- filesystem helpers ----------------------------------------------------
 
 bool FileExists(const std::string& fname) {
@@ -163,6 +223,21 @@ Status GetChildren(const std::string& dir, std::vector<std::string>* result) {
     result->emplace_back(entry->d_name);
   }
   ::closedir(d);
+#endif
+  return Status::OK();
+}
+
+Status RenameFile(const std::string& src, const std::string& dst) {
+#if defined(_WIN32)
+  // std::rename fails on Windows when dst exists; MoveFileEx with
+  // MOVEFILE_REPLACE_EXISTING gives POSIX semantics.
+  if (!MoveFileExA(src.c_str(), dst.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+    return Status::IOError(src, "MoveFileEx failed");
+  }
+#else
+  if (std::rename(src.c_str(), dst.c_str()) != 0) {
+    return PosixError(src, errno);
+  }
 #endif
   return Status::OK();
 }

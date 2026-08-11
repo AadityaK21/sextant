@@ -1,6 +1,6 @@
 // Concurrent skiplist: one writer, many lock-free readers.
 //
-// WHY A SKIPLIST AND NOT A RED-BLACK TREE — the interview answer:
+// WHY A SKIPLIST AND NOT A RED-BLACK TREE - the interview answer:
 //
 //   1. Concurrency.  A balanced tree rebalances by ROTATING, which mutates
 //      pointers that readers are actively walking.  You would need a lock or
@@ -9,14 +9,14 @@
 //   2. Simplicity.  Insert is "pick a random height, splice".  There are no
 //      rebalancing cases and no colour invariants.  ~200 lines versus a
 //      correct concurrent RB-tree, which is considerably more.
-//   3. Range scans are trivial — walk level 0.
+//   3. Range scans are trivial - walk level 0.
 //
 //   Cost: O(log n) is probabilistic rather than worst-case guaranteed, and
 //   there is pointer overhead of 1/(1-p) = 1.33 pointers per node at p = 1/4.
 //
 // THE MEMORY-ORDERING ARGUMENT (be ready to give this one precisely):
 //
-//   A node is fully constructed — key written, next pointers set — BEFORE it
+//   A node is fully constructed - key written, next pointers set - BEFORE it
 //   is published.  Publication is a single release-store into the predecessor's
 //   next pointer.  A reader that acquire-loads that pointer and sees the new
 //   node is therefore guaranteed to see the fully-initialised node.  That
@@ -24,7 +24,7 @@
 //   lock on the read path at all.
 //
 //   Readers may run concurrently with the writer.  Multiple writers are NOT
-//   supported — that is the DB's job, and it holds a mutex over the write path.
+//   supported - that is the DB's job, and it holds a mutex over the write path.
 //   This is deliberate: the write path is already serialised by the WAL append,
 //   so a lock-free writer would buy nothing.
 
@@ -89,7 +89,7 @@ class SkipList {
   bool KeyIsAfterNode(const Key& key, Node* n) const;
 
   // Lowest node with a key >= the target. If prev is non-null, fill it with
-  // the predecessor at every level — that is exactly what Insert needs.
+  // the predecessor at every level - that is exactly what Insert needs.
   Node* FindGreaterOrEqual(const Key& key, Node** prev) const;
   Node* FindLessThan(const Key& key) const;
   Node* FindLast() const;
@@ -158,7 +158,7 @@ inline SkipList<Key, Comparator>::Iterator::Iterator(const SkipList* list)
 
 template <typename Key, class Comparator>
 inline void SkipList<Key, Comparator>::Iterator::Prev() {
-  // No back pointers — walk forward from the head instead. Prev is rare
+  // No back pointers - walk forward from the head instead. Prev is rare
   // (reverse iteration), so paying O(log n) for it beats one extra pointer per
   // node for every node in the list.
   assert(Valid());

@@ -18,7 +18,7 @@
 // crash is intact. This is the property the crash test asserts.
 //
 // WHAT DURABILITY ACTUALLY MEANS HERE: Append() alone only reaches the OS page
-// cache — it survives a process crash. Only Sync() survives power loss, and it
+// cache - it survives a process crash. Only Sync() survives power loss, and it
 // costs a real device round-trip, so the DB batches many writes behind a
 // single Sync (group commit). WriteOptions::sync selects the guarantee.
 

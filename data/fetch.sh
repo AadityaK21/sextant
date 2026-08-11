@@ -91,7 +91,7 @@ fetch_ais() {
   cat <<'EOF'
   MANUAL STEP (deliberately).
   The annual bulk files are multi-gigabyte. Use the AccessAIS extractor to pull
-  a bounded area and time window instead — a few days of one port approach is
+  a bounded area and time window instead - a few days of one port approach is
   plenty to exercise the resolver:
 
       https://marinecadastre.gov/accessais/

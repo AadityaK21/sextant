@@ -58,7 +58,7 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) const {
   // Seek landed on the first entry >= (user_key, seq, kValueTypeForSeek).
   // Because the trailer sorts descending, that is the NEWEST version of this
   // user key that is visible at this sequence number. We only have to check
-  // that the user key actually matches — no version loop needed.
+  // that the user key actually matches - no version loop needed.
   const char* entry = iter.key();
   uint32_t key_length = 0;
   const char* key_ptr = GetVarint32Ptr(entry, entry + 5, &key_length);

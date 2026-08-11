@@ -148,7 +148,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
 
       case kEof:
         // A truncated fragmented record is exactly what a crash mid-append
-        // looks like. Drop it silently — the write was never acknowledged.
+        // looks like. Drop it silently - the write was never acknowledged.
         if (in_fragmented_record) scratch->clear();
         return false;
 

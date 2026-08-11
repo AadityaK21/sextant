@@ -39,7 +39,7 @@ TEST(CRC32C, ExtendIsIncremental) {
   const std::string whole = "hello world, this is a record payload";
   const uint32_t one_shot = crc32c::Value(whole.data(), whole.size());
 
-  // Computing in pieces must equal computing in one go — the WAL writer relies
+  // Computing in pieces must equal computing in one go - the WAL writer relies
   // on this to CRC the type byte and payload separately.
   for (size_t split = 0; split <= whole.size(); ++split) {
     uint32_t c = crc32c::Extend(0, whole.data(), split);

@@ -8,7 +8,7 @@
 //
 // Castagnoli rather than the more familiar CRC32 (0xEDB88320) because it has
 // better error-detection properties for short records and because x86-64 has a
-// hardware instruction for it (SSE4.2 `crc32`) — a natural later optimisation,
+// hardware instruction for it (SSE4.2 `crc32`) - a natural later optimisation,
 // noted in docs/adr.
 
 #pragma once

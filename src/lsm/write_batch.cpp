@@ -85,7 +85,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
 namespace {
 
 // Assigns consecutive sequence numbers within the batch. Every record in a
-// batch gets its OWN sequence, not a shared one — otherwise two writes to the
+// batch gets its OWN sequence, not a shared one - otherwise two writes to the
 // same key inside one batch would collide in the skiplist, and last-write-wins
 // ordering inside the batch would be undefined.
 class MemTableInserter : public WriteBatch::Handler {

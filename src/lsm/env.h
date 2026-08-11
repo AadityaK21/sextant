@@ -4,7 +4,7 @@
 // durability barrier, and sequential read. Everything else is out of scope.
 //
 // The one subtlety worth knowing: Flush() and Sync() are different operations.
-// Flush pushes bytes from our userspace buffer into the OS page cache — after
+// Flush pushes bytes from our userspace buffer into the OS page cache - after
 // which the data survives a *process* crash but not a *machine* crash. Sync
 // forces the OS to push them to the device, which is the only thing that
 // survives power loss. WAL group-commit exists precisely because Sync is
@@ -68,9 +68,39 @@ class SequentialFile {
   std::string filename_;
 };
 
+// Read from arbitrary offsets, concurrently, from many threads.
+//
+// This is the SSTable access pattern and it is why it needs its own type
+// rather than reusing SequentialFile: an SSTable read is "give me the 4 KB at
+// offset 812,416", driven by an index, never a scan from the start.
+//
+// Read() is const and thread-safe. Multiple readers share one open file
+// without coordination, which matters once the read path fans out across
+// several tables per lookup.
+class RandomAccessFile {
+ public:
+  static Status Open(const std::string& fname, std::unique_ptr<RandomAccessFile>* result);
+
+  ~RandomAccessFile();
+  RandomAccessFile(const RandomAccessFile&) = delete;
+  RandomAccessFile& operator=(const RandomAccessFile&) = delete;
+
+  // Read n bytes starting at offset into scratch, pointing result at them.
+  // Safe to call concurrently.
+  Status Read(uint64_t offset, size_t n, Slice* result, char* scratch) const;
+
+  const std::string& filename() const { return filename_; }
+
+ private:
+  RandomAccessFile(int fd, std::string fname) : fd_(fd), filename_(std::move(fname)) {}
+
+  int fd_;
+  std::string filename_;
+};
+
 // --- filesystem helpers ----------------------------------------------------
 
-// NAMING HAZARD, learned the hard way — see docs/BUGS.md.
+// NAMING HAZARD, learned the hard way - see docs/BUGS.md.
 //
 // <windows.h> defines a family of API names as PREPROCESSOR MACROS that expand
 // to an -A or -W suffixed variant:
@@ -91,6 +121,10 @@ Status CreateDir(const std::string& dirname);
 Status GetFileSize(const std::string& fname, uint64_t* size);
 Status RemoveFile(const std::string& fname);
 Status GetChildren(const std::string& dir, std::vector<std::string>* result);
+
+// Rename, replacing dst if it exists. POSIX rename() already does this; the
+// Win32 equivalent needs MOVEFILE_REPLACE_EXISTING to match.
+Status RenameFile(const std::string& src, const std::string& dst);
 
 // Truncate a file to n bytes. Used by the crash-simulation tests to
 // manufacture a torn tail without actually killing a process.

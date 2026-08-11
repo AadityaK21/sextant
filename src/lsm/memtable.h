@@ -50,7 +50,7 @@ class MemTable {
 
   void Add(SequenceNumber seq, ValueType type, const Slice& key, const Slice& value);
 
-  // Returns true if an entry for key was found — INCLUDING a tombstone, in
+  // Returns true if an entry for key was found - INCLUDING a tombstone, in
   // which case *s is set to NotFound.  Returning true for a tombstone is what
   // stops the caller falling through to older levels and resurrecting a
   // deleted value.

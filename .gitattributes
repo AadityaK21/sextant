@@ -3,7 +3,7 @@
 # Git on Windows converts LF to CRLF on checkout by default. That is fine for
 # C++ sources, but it silently breaks two things:
 #
-#   * shell scripts — a CRLF shebang fails on Linux with the memorable and
+#   * shell scripts - a CRLF shebang fails on Linux with the memorable and
 #     unhelpful "bad interpreter: /usr/bin/env bash^M"
 #   * anything a Linux container reads verbatim
 #

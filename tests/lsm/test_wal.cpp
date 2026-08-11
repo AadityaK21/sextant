@@ -112,13 +112,13 @@ TEST_F(WALTest, TruncatedTailDropsOnlyTheLastRecord) {
   uint64_t size = 0;
   ASSERT_TRUE(GetFileSize(path_, &size).ok());
 
-  // Chop a few bytes off the end — a torn final record.
+  // Chop a few bytes off the end - a torn final record.
   ASSERT_TRUE(TruncateFile(path_, size - 4).ok());
 
   const std::vector<std::string> recovered = ReadAll();
 
   ASSERT_EQ(records.size() - 1, recovered.size())
-      << "exactly one record — the torn one — should be lost";
+      << "exactly one record - the torn one - should be lost";
   for (size_t i = 0; i < recovered.size(); ++i) {
     EXPECT_EQ(records[i], recovered[i]) << "record " << i << " must be intact";
   }

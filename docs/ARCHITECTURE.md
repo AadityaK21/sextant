@@ -1,4 +1,4 @@
-# Sextant — Architecture & Design
+# Sextant - Architecture & Design
 
 *A mini-Foundry: ontology, entity resolution, and cell-level lineage over an LSM storage engine.*
 
@@ -8,7 +8,7 @@
 
 ## 0. The one-sentence pitch
 
-> Sextant ingests maritime data from three heterogeneous sources, maps it onto a declarative ontology, resolves duplicate real-world entities across sources, and records — for every single property value — the exact source row and transform chain that produced it. It runs on a log-structured merge-tree storage engine written from scratch.
+> Sextant ingests maritime data from three heterogeneous sources, maps it onto a declarative ontology, resolves duplicate real-world entities across sources, and records - for every single property value - the exact source row and transform chain that produced it. It runs on a log-structured merge-tree storage engine written from scratch.
 
 *A sextant fixes your position by combining several independent observations. That is literally entity resolution.*
 
@@ -20,7 +20,7 @@ Most student projects that attempt this become seven disconnected demos. The thi
 
 > **The LSM engine gives you an ordered key-value store with prefix scan. Every layer above it is a key encoding.**
 
-Entities, links, provenance, secondary indexes, blocking indexes, raw records — all of it is bytes in one keyspace, laid out so the access pattern you need is a *sequential range scan*. Graph traversal isn't a separate subsystem; it's a prefix scan. Time-windowed queries aren't a filter; they're a range scan over a big-endian timestamp suffix.
+Entities, links, provenance, secondary indexes, blocking indexes, raw records - all of it is bytes in one keyspace, laid out so the access pattern you need is a *sequential range scan*. Graph traversal isn't a separate subsystem; it's a prefix scan. Time-windowed queries aren't a filter; they're a range scan over a big-endian timestamp suffix.
 
 When an interviewer asks "how does the whole thing fit together," this is your answer. Lead with it.
 
@@ -30,31 +30,31 @@ When an interviewer asks "how does the whole thing fit together," this is your a
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
-│  web/  —  React + Vite + TypeScript                           │
+│  web/ - React + Vite + TypeScript                           │
 │  Type browser · Entity detail · Link graph · Lineage drawer   │
 │  Review queue                                                 │
 └──────────────────────────┬────────────────────────────────────┘
                            │  HTTP / JSON
 ┌──────────────────────────▼────────────────────────────────────┐
-│  src/api/  —  cpp-httplib                                     │
+│  src/api/ - cpp-httplib                                     │
 │  /ontology /entities /links /traverse /lineage /raw /review    │
 ├───────────────────────────────────────────────────────────────┤
-│  src/query/  —  planner + executor                            │
+│  src/query/ - planner + executor                            │
 │  index selection · frontier expansion · predicate pushdown    │
 ├───────────────────────────────────────────────────────────────┤
-│  src/ontology/  —  type registry, validation, link cardinality│
+│  src/ontology/ - type registry, validation, link cardinality│
 ├───────────────────────────────────────────────────────────────┤
-│  src/resolve/  —  normalize → block → score → cluster → fuse  │
+│  src/resolve/ - normalize → block → score → cluster → fuse  │
 │         ▲                                                     │
-│  src/lineage/  —  provenance emitted at every fusion decision  │
+│  src/lineage/ - provenance emitted at every fusion decision  │
 ├───────────────────────────────────────────────────────────────┤
-│  src/transform/  —  registry of named, pure, versioned fns    │
+│  src/transform/ - registry of named, pure, versioned fns    │
 ├───────────────────────────────────────────────────────────────┤
-│  src/connectors/  —  CSV · HTTP/JSON · Postgres               │
+│  src/connectors/ - CSV · HTTP/JSON · Postgres               │
 ├───────────────────────────────────────────────────────────────┤
-│  src/codec/  —  key encoding (the glue)                       │
+│  src/codec/ - key encoding (the glue)                       │
 ├───────────────────────────────────────────────────────────────┤
-│  src/lsm/  —  WAL · MemTable · SSTable · Bloom · Compaction   │
+│  src/lsm/ - WAL · MemTable · SSTable · Bloom · Compaction   │
 │              VersionSet · Snapshots · Block cache             │
 └───────────────────────────────────────────────────────────────┘
 ```
@@ -65,37 +65,37 @@ When an interviewer asks "how does the whole thing fit together," this is your a
 
 You need three *structurally different* connectors. These also give you real, unforced duplication.
 
-### Source A — CSV bulk dump
+### Source A - CSV bulk dump
 
-**NGA World Port Index** (~3,700 ports worldwide) — port names in `ALL CAPS`, an `Alternate Port Name` column, patchy UN/LOCODE coverage, decimal lat/lon.
+**NGA World Port Index** (~3,700 ports worldwide) - port names in `ALL CAPS`, an `Alternate Port Name` column, patchy UN/LOCODE coverage, decimal lat/lon.
 
-**UN/LOCODE code list** from UNECE (~110,000 locations) — the canonical code authority. Names *with* diacritics plus a `NameWoDiacritics` column, coordinates in degree-minute format (`5155N 00430E`), a `Function` bitfield telling you whether a location is a seaport, airport, rail terminal, etc.
+**UN/LOCODE code list** from UNECE (~110,000 locations) - the canonical code authority. Names *with* diacritics plus a `NameWoDiacritics` column, coordinates in degree-minute format (`5155N 00430E`), a `Function` bitfield telling you whether a location is a seaport, airport, rail terminal, etc.
 
 Downloads: [UNECE UN/LOCODE](https://unece.org/trade/cefact/UNLOCODE-Download) (last updated 27 May 2026; releases cut off 31 March and 30 September). A pre-parsed mirror lives at [datasets/un-locode](https://github.com/datasets/un-locode) if the official ZIP fights you.
 
-### Source B — JSON HTTP API
+### Source B - JSON HTTP API
 
-**Fintraffic Digitraffic marine APIs** — free, no API key, open licence. Four endpoints matter:
+**Fintraffic Digitraffic marine APIs** - free, no API key, open licence. Four endpoints matter:
 
 | Endpoint | Gives you |
 |---|---|
-| `https://meri.digitraffic.fi/api/port-call/v1/port-calls` | **Voyages** — vessel arriving/departing a port with timestamps |
+| `https://meri.digitraffic.fi/api/port-call/v1/port-calls` | **Voyages** - vessel arriving/departing a port with timestamps |
 | `https://meri.digitraffic.fi/api/port-call/v1/ports` | Port metadata (Finnish LOCODEs + free-text names) |
-| `https://meri.digitraffic.fi/api/port-call/v1/vessel-details` | Vessel registry — IMO, MMSI, name, tonnage |
+| `https://meri.digitraffic.fi/api/port-call/v1/vessel-details` | Vessel registry - IMO, MMSI, name, tonnage |
 | `https://meri.digitraffic.fi/api/ais/v1/locations` | Live AIS positions |
 | `https://meri.digitraffic.fi/api/ais/v1/vessels` | AIS-derived vessel metadata |
 
-Send a `Digitraffic-User: <yourname>/sextant` header — it's requested by their terms and some endpoints behave badly without it.
+Send a `Digitraffic-User: <yourname>/sextant` header - it's requested by their terms and some endpoints behave badly without it.
 
 The port-calls endpoint is the gift here: it *is* your `Voyage` entity, with `departs_from` and `arrives_at` links already implied.
 
-### Source C — Postgres
+### Source C - Postgres
 
 Load a slice of **MarineCadastre.gov AIS** (NOAA + BOEM + USCG) into Postgres and read it through `libpqxx`. Data since 2015 is distributed as Zstd-compressed daily CSVs; use the AccessAIS extractor to pull a bounded area/timeframe rather than the multi-GB annual files.
 
 This is not cheating. In the real world your third source *is* someone's operational warehouse. It gives you: a different vessel-type taxonomy (USCG codes vs. AIS type codes), MMSI-keyed records with no IMO, and US port naming conventions. All three are excellent duplication generators.
 
-> **Reproducibility discipline:** snapshot every API response and CSV to `data/snapshots/<source>/<batch_id>/` on first fetch, and replay from disk during development. Your build must not depend on a live network. Mention this in your README — it reads as professional.
+> **Reproducibility discipline:** snapshot every API response and CSV to `data/snapshots/<source>/<batch_id>/` on first fetch, and replay from disk during development. Your build must not depend on a live network. Mention this in your README - it reads as professional.
 
 ---
 
@@ -111,17 +111,17 @@ Build this first, freeze it fast, come back to polish. It is the highest-risk co
 [ crc32c : 4 ][ length : 4 ][ type : 1 ][ payload : length ]
 ```
 
-`type` handles records that span block boundaries (`FULL`/`FIRST`/`MIDDLE`/`LAST`) — this is the LevelDB log format and it means a torn tail is detectable, not fatal. Group-commit: batch writers share one `fsync`.
+`type` handles records that span block boundaries (`FULL`/`FIRST`/`MIDDLE`/`LAST`) - this is the LevelDB log format and it means a torn tail is detectable, not fatal. Group-commit: batch writers share one `fsync`.
 
-**MemTable — skiplist.** Not a red-black tree. Reasons you should be able to give: no rebalancing, lock-free concurrent readers with a single writer (readers only follow `atomic` forward pointers, and a node is fully constructed before it's linked in), and probabilistic *O(log n)* with far simpler code.
+**MemTable - skiplist.** Not a red-black tree. Reasons you should be able to give: no rebalancing, lock-free concurrent readers with a single writer (readers only follow `atomic` forward pointers, and a node is fully constructed before it's linked in), and probabilistic *O(log n)* with far simpler code.
 
-**Internal key encoding** — the trick that buys you MVCC, deletes, and snapshots in one move:
+**Internal key encoding** - the trick that buys you MVCC, deletes, and snapshots in one move:
 
 ```
 internal_key = user_key || sequence(7 bytes, big-endian) || value_type(1 byte)
 ```
 
-The comparator sorts `user_key` ascending, then `sequence` **descending**. So a forward scan sees the newest version of a key first — the read path just takes the first hit and skips the rest. `value_type` is `kTypeValue` or `kTypeDeletion`; a delete is a *tombstone*, not a removal.
+The comparator sorts `user_key` ascending, then `sequence` **descending**. So a forward scan sees the newest version of a key first - the read path just takes the first hit and skips the rest. `value_type` is `kTypeValue` or `kTypeDeletion`; a delete is a *tombstone*, not a removal.
 
 **SSTable format:**
 
@@ -147,19 +147,19 @@ Data blocks use **prefix-compressed keys with restart points** every 16 entries:
 
 Restart points let you binary-search *within* a block. Prefix compression matters a lot for your workload because your keys are structured and share long prefixes by construction (`LINKOUT | src_eid | link_type | …`). Being able to say "my key design makes my block compression effective" is a strong, specific observation.
 
-**Bloom filters.** 10 bits per key → false-positive rate ≈ 1%. Optimal hash count `k = (m/n)·ln2 ≈ 7`. Don't compute 7 hashes; use Kirsch–Mitzenmacher double hashing: `g_i(x) = h1(x) + i·h2(x)`, from one 64-bit hash split in half. The false-positive formula, which you should have memorised:
+**Bloom filters.** 10 bits per key → false-positive rate ≈ 1%. Optimal hash count `k = (m/n)·ln2 ≈ 7`. Don't compute 7 hashes; use Kirsch-Mitzenmacher double hashing: `g_i(x) = h1(x) + i·h2(x)`, from one 64-bit hash split in half. The false-positive formula, which you should have memorised:
 
 ```
 p ≈ (1 − e^(−kn/m))^k
 ```
 
-**Block cache.** Sharded LRU, 16 shards keyed by `hash(file_id, block_offset) & 15`, each with its own mutex. Sharding is the whole point — a single global mutex on the cache is the classic bottleneck.
+**Block cache.** Sharded LRU, 16 shards keyed by `hash(file_id, block_offset) & 15`, each with its own mutex. Sharding is the whole point - a single global mutex on the cache is the classic bottleneck.
 
 **VersionSet + MANIFEST.** The set of live SSTables per level is *state*. Persist it as an edit log (`VersionEdit`: files added, files deleted, new log number, last sequence). Recovery = replay MANIFEST to rebuild the file set, then replay the WAL from the last persisted sequence. A `Version` is refcounted and immutable, so an open iterator pins the files it needs against concurrent compaction.
 
-**Compaction — leveled.** L0 files overlap (they're just flushed memtables). L1+ are non-overlapping and globally sorted within a level. Target size ratio 10× per level. Pick the compaction with the highest score (`level_bytes / target_bytes`, or file *count* for L0). Write stalls when L0 file count crosses a threshold — this is the well-known LSM pathology and you should be able to describe it.
+**Compaction - leveled.** L0 files overlap (they're just flushed memtables). L1+ are non-overlapping and globally sorted within a level. Target size ratio 10× per level. Pick the compaction with the highest score (`level_bytes / target_bytes`, or file *count* for L0). Write stalls when L0 file count crosses a threshold - this is the well-known LSM pathology and you should be able to describe it.
 
-**Snapshots.** A snapshot is just a sequence number. Reads skip entries with `seq > snapshot_seq`. This is nearly free and it's *load-bearing* for you: a multi-hop graph traversal touches thousands of keys, and without a snapshot a concurrent ingest could show you a half-merged entity. It also gives you time travel over the ontology for free — "show me this entity as of last Tuesday's batch" is a snapshot read.
+**Snapshots.** A snapshot is just a sequence number. Reads skip entries with `seq > snapshot_seq`. This is nearly free and it's *load-bearing* for you: a multi-hop graph traversal touches thousands of keys, and without a snapshot a concurrent ingest could show you a half-merged entity. It also gives you time travel over the ontology for free - "show me this entity as of last Tuesday's batch" is a snapshot read.
 
 **Iterators.** A merging iterator over: memtable, immutable memtable, each L0 file individually (they overlap), and one *concatenating* iterator per level ≥1 (they don't overlap, so you can binary-search the file list then walk). K-way merge with a small heap.
 
@@ -191,7 +191,7 @@ Put(batch):
 
 ### 4.4 Public interface
 
-Keep it deliberately small — this is what the rest of the system codes against.
+Keep it deliberately small - this is what the rest of the system codes against.
 
 ```cpp
 namespace lsm {
@@ -220,7 +220,7 @@ public:
 
 ---
 
-## 5. Key encoding — the glue layer
+## 5. Key encoding - the glue layer
 
 One byte of keyspace prefix, then a fixed layout. All integers big-endian so byte order equals numeric order.
 
@@ -232,7 +232,7 @@ One byte of keyspace prefix, then a fixed layout. All integers big-endian so byt
 | `0x04` | `LINKOUT` | `src_eid(16) ‖ link_type(2) ‖ dst_eid(16)` | edge payload |
 | `0x05` | `LINKIN` | `dst_eid(16) ‖ link_type(2) ‖ src_eid(16)` | edge payload (mirror) |
 | `0x06` | `PROV` | `eid(16) ‖ prop(2) ‖ version(8)` | `Provenance` |
-| `0x07` | `XREF` | `src(4) ‖ src_pk_hash(8)` | `eid(16)` — where did this row land? |
+| `0x07` | `XREF` | `src(4) ‖ src_pk_hash(8)` | `eid(16)` - where did this row land? |
 | `0x08` | `BLOCK` | `block_key_hash(8) ‖ src(4) ‖ rec(8)` | ∅ (blocking index) |
 | `0x09` | `IDX` | `type(2) ‖ prop(2) ‖ value ‖ 0x00 ‖ eid(16)` | ∅ (secondary index) |
 | `0x0A` | `TIDX` | `link_type(2) ‖ anchor_eid(16) ‖ ts_be(8) ‖ eid(16)` | ∅ (time-ordered traversal) |
@@ -243,7 +243,7 @@ One byte of keyspace prefix, then a fixed layout. All integers big-endian so byt
 ### Why this specific layout wins
 
 - **`LINKOUT` prefix scan** `0x04 ‖ eid ‖ link_type` returns every outgoing edge of one type as a contiguous range. That is your entire graph traversal engine, and it's *one sequential read*.
-- **`LINKIN` is a deliberate denormalisation.** You store every edge twice. Cost: 2× link storage. Benefit: reverse traversal ("which voyages arrived *at* this port") is as cheap as forward. Be ready to defend this trade — it's a real one.
+- **`LINKIN` is a deliberate denormalisation.** You store every edge twice. Cost: 2× link storage. Benefit: reverse traversal ("which voyages arrived *at* this port") is as cheap as forward. Be ready to defend this trade - it's a real one.
 - **`TIDX` is why the quarter-query is fast.** `0x0A ‖ arrives_at ‖ rotterdam_eid ‖ ts` with a big-endian timestamp means "all voyages into Rotterdam between April and July" is a *range scan over a contiguous byte range*, not a scan-and-filter. Say exactly this in the interview.
 - **`CAND` uses inverted score** (`UINT32_MAX − score`) as the key prefix, so scanning the review queue naturally returns the most-uncertain pairs first.
 - **`PROV` versioned by LSM sequence number** means provenance history is append-only and ordered for free.
@@ -252,7 +252,7 @@ One byte of keyspace prefix, then a fixed layout. All integers big-endian so byt
 
 ## 6. The ontology layer
 
-Declarative. YAML. The whole point is that adding an entity type requires **zero code changes** — including in the frontend, which reads the schema from `/api/ontology` and renders generically.
+Declarative. YAML. The whole point is that adding an entity type requires **zero code changes** - including in the frontend, which reads the schema from `/api/ontology` and renders generically.
 
 ### `schema/ontology.yaml`
 
@@ -296,7 +296,7 @@ link_types:
   operated_by:  { from: Voyage, to: Vessel, cardinality: many_to_one, inverse: voyages }
 ```
 
-Note `time_index: arrived_at` — that declaration is what causes the `TIDX` keyspace to be populated. Declarative indexing.
+Note `time_index: arrived_at` - that declaration is what causes the `TIDX` keyspace to be populated. Declarative indexing.
 
 ### `schema/mappings/wpi.yaml`
 
@@ -321,7 +321,7 @@ mappings:
       harbor_size: { from: "Harbor Size",         transform: [trim, upper, first_char] }
 ```
 
-### The transform registry — non-negotiable design rule
+### The transform registry - non-negotiable design rule
 
 ```cpp
 // Every transform is a pure function with a stable, versioned identifier.
@@ -330,7 +330,7 @@ using TransformFn = std::function<TValue(const TValue&, const TransformCtx&)>;
 struct Transform {
   TransformId id;          // e.g. 0x0107
   std::string name;        // "title_case"
-  uint16_t    version;     // bump when behaviour changes — old lineage stays valid
+  uint16_t    version;     // bump when behaviour changes - old lineage stays valid
   TransformFn fn;
 };
 ```
@@ -379,15 +379,15 @@ Port names:
 
 Identifiers:
 
-- **LOCODE** — uppercase, strip spaces. 5 chars: 2 country + 3 location.
-- **IMO number** — 7 digits, and it has a **check digit**. Multiply digits 1–6 by weights 7,6,5,4,3,2; sum; the last digit of the sum must equal digit 7. Validating this catches transcription errors *and* gives you a nice small piece of domain code.
-- **MMSI** — 9 digits. The first three are the **MID** (Maritime Identification Digits) and encode the flag state. Cross-checking MID against the declared flag is a free extra feature.
+- **LOCODE** - uppercase, strip spaces. 5 chars: 2 country + 3 location.
+- **IMO number** - 7 digits, and it has a **check digit**. Multiply digits 1-6 by weights 7,6,5,4,3,2; sum; the last digit of the sum must equal digit 7. Validating this catches transcription errors *and* gives you a nice small piece of domain code.
+- **MMSI** - 9 digits. The first three are the **MID** (Maritime Identification Digits) and encode the flag state. Cross-checking MID against the declared flag is a free extra feature.
 
-### 7.2 Blocking — why, and how to prove it worked
+### 7.2 Blocking - why, and how to prove it worked
 
 Naive comparison is *O(n²)*: 3,700 WPI ports × 110,000 UN/LOCODE rows ≈ **400 million pairs**. Blocking cuts this to a few hundred thousand.
 
-Use **multiple blocking keys** with disjunctive semantics — two records are candidates if they share *any* block. Multiple weak keys beat one strong key because each one covers a different failure mode.
+Use **multiple blocking keys** with disjunctive semantics - two records are candidates if they share *any* block. Multiple weak keys beat one strong key because each one covers a different failure mode.
 
 | Key | Definition | Catches |
 |---|---|---|
@@ -399,16 +399,16 @@ Use **multiple blocking keys** with disjunctive semantics — two records are ca
 
 **Block purging:** skip any block with more than ~200 members. A block that large isn't discriminative (it's usually `country=US`) and it will dominate your runtime.
 
-**Report two metrics — this is what a serious ER writeup looks like:**
+**Report two metrics - this is what a serious ER writeup looks like:**
 
-- **Reduction Ratio** `RR = 1 − (candidate pairs / all pairs)` — how much work you saved. Target > 0.999.
-- **Pair Completeness** `PC = (true matches surviving blocking) / (all true matches)` — how much recall you sacrificed. Target > 0.98.
+- **Reduction Ratio** `RR = 1 − (candidate pairs / all pairs)` - how much work you saved. Target > 0.999.
+- **Pair Completeness** `PC = (true matches surviving blocking) / (all true matches)` - how much recall you sacrificed. Target > 0.98.
 
 The tension between those two is the entire art of blocking. Put both numbers in your README.
 
 ### 7.3 Scoring
 
-A weighted linear feature vector — interpretable, debuggable, and tunable against a labeled set. No black box.
+A weighted linear feature vector - interpretable, debuggable, and tunable against a labeled set. No black box.
 
 **Port pair features:**
 
@@ -422,13 +422,13 @@ A weighted linear feature vector — interpretable, debuggable, and tunable agai
 | `geo_conflict` | distance > 100 km | **−6.0** (veto) |
 | `country_match` | ISO-2 equal | +1.0, else −4.0 |
 
-**Vessel pair features** — note the asymmetry, this is the domain-knowledge answer:
+**Vessel pair features** - note the asymmetry, this is the domain-knowledge answer:
 
 | Feature | Weight | Why |
 |---|---|---|
 | `imo_exact` (both checksum-valid) | **+10.0** | IMO is assigned to a *hull* and never changes, even through renaming, reflagging, or resale. Near-decisive. |
 | `imo_conflict` | **−20.0** | Different hulls. Hard veto, overrides everything. |
-| `mmsi_exact` | +4.0 | Strong but *not* decisive — MMSI is tied to the radio licence and is **reassigned when a vessel changes flag**. Two different ships can hold the same MMSI at different times. |
+| `mmsi_exact` | +4.0 | Strong but *not* decisive - MMSI is tied to the radio licence and is **reassigned when a vessel changes flag**. Two different ships can hold the same MMSI at different times. |
 | `callsign_exact` | +3.0 | Same reassignment caveat as MMSI. |
 | `name_jaro_winkler` | ×2.0 | Vessels get renamed constantly. Weak signal. |
 | `mid_flag_agreement` | +1.0 | MMSI prefix consistent with declared flag. |
@@ -443,9 +443,9 @@ score < 2.0    →  NO MATCH
 
 **Do not skip the review band.** A system that admits uncertainty and routes it to a human is what a production data platform actually does. It's also the cheapest way to look mature.
 
-> **Interview ammunition:** this weighted-sum scorer is a hand-tuned approximation of the **Fellegi–Sunter** probabilistic record linkage model (1969), where each feature contributes `log(m_i/u_i)` — the log-likelihood ratio of agreement given a match vs. given a non-match. Saying this shows you know there's a literature and you chose a pragmatic point in it. You can even fit `m` and `u` from your labeled set with EM if you want a stretch goal.
+> **Interview ammunition:** this weighted-sum scorer is a hand-tuned approximation of the **Fellegi-Sunter** probabilistic record linkage model (1969), where each feature contributes `log(m_i/u_i)` - the log-likelihood ratio of agreement given a match vs. given a non-match. Saying this shows you know there's a literature and you chose a pragmatic point in it. You can even fit `m` and `u` from your labeled set with EM if you want a stretch goal.
 
-### 7.4 Clustering — and the trap
+### 7.4 Clustering - and the trap
 
 You have scored pairs. You need *clusters*. The obvious move is union-find on all MATCH edges. The obvious move is wrong.
 
@@ -459,7 +459,7 @@ You have scored pairs. You need *clusters*. The obvious move is union-find on al
 
 Naive union-find merges all three into one entity. You've just silently destroyed a distinct port.
 
-**Fix — veto-constrained union-find.** Process MATCH edges in *descending score order*. Before each union, check whether any pair `(a ∈ cluster_A, b ∈ cluster_B)` carries a **veto** (a hard-negative feature like `locode_conflict` or `geo_conflict`). If so, refuse the merge and record it as a *blocked merge* — which is itself great lineage.
+**Fix - veto-constrained union-find.** Process MATCH edges in *descending score order*. Before each union, check whether any pair `(a ∈ cluster_A, b ∈ cluster_B)` carries a **veto** (a hard-negative feature like `locode_conflict` or `geo_conflict`). If so, refuse the merge and record it as a *blocked merge* - which is itself great lineage.
 
 Keep a per-cluster veto set so the check is cheap. This is a lightweight approximation of **correlation clustering**, which is NP-hard in general.
 
@@ -471,10 +471,10 @@ A cluster holds N source records. You must emit **one** entity with **one** valu
 
 | Rule | Behaviour | Good for |
 |---|---|---|
-| `most_trusted` | highest source `trust` wins | `locode` — UN/LOCODE is the authority |
-| `most_recent` | highest source timestamp | `name`, `flag` — vessels get renamed and reflagged |
+| `most_trusted` | highest source `trust` wins | `locode` - UN/LOCODE is the authority |
+| `most_recent` | highest source timestamp | `name`, `flag` - vessels get renamed and reflagged |
 | `most_frequent` | plurality vote across sources | `country` |
-| `numeric_median` | median of numeric values | `lat`/`lon` — robust to one bad source |
+| `numeric_median` | median of numeric values | `lat`/`lon` - robust to one bad source |
 | `longest` | longest non-empty string | free-text descriptions |
 | `union` | set union | `alt_names` |
 
@@ -563,15 +563,15 @@ TEST(Lineage, RoundTripsForEveryProperty) {
 }
 ```
 
-If this passes over your full dataset, your lineage is not decoration — it is a **verified invariant**. Lead your README with it. Lead your interview with it.
+If this passes over your full dataset, your lineage is not decoration - it is a **verified invariant**. Lead your README with it. Lead your interview with it.
 
 ### The rest of the test suite
 
-1. **LSM differential test** — run 10⁶ random ops (put/delete/get/scan/snapshot) against your DB and a reference `std::map`, assert identical results at every step.
-2. **Crash recovery** — `kill -9` mid-write in a loop; assert every acknowledged write survives and no torn record is accepted (CRC catches the tail).
-3. **Compaction invariants** — after every compaction: no key appears in two files at the same level ≥ 1; level sizes within bounds; a full scan still matches the reference map.
-4. **ER golden set** — hand-label ~300 port pairs and ~200 vessel pairs. Report **precision / recall / F1**, hold out 20% for validation. *Accuracy is a meaningless metric here* — 99.99% of pairs are non-matches, so a model that says "never match" scores 99.99%. Know why you report F1.
-5. **Benchmarks** — writes/sec, point-read p50/p99, scan throughput, space amplification, compaction bytes written. Chart them.
+1. **LSM differential test** - run 10⁶ random ops (put/delete/get/scan/snapshot) against your DB and a reference `std::map`, assert identical results at every step.
+2. **Crash recovery** - `kill -9` mid-write in a loop; assert every acknowledged write survives and no torn record is accepted (CRC catches the tail).
+3. **Compaction invariants** - after every compaction: no key appears in two files at the same level ≥ 1; level sizes within bounds; a full scan still matches the reference map.
+4. **ER golden set** - hand-label ~300 port pairs and ~200 vessel pairs. Report **precision / recall / F1**, hold out 20% for validation. *Accuracy is a meaningless metric here* - 99.99% of pairs are non-matches, so a model that says "never match" scores 99.99%. Know why you report F1.
+5. **Benchmarks** - writes/sec, point-read p50/p99, scan throughput, space amplification, compaction bytes written. Chart them.
 
 ---
 
@@ -625,7 +625,7 @@ Exposing your own cost accounting is a small thing that makes the system read as
 
 ## 11. Frontend
 
-Vite + React + TypeScript. Keep it thin — the backend is the project.
+Vite + React + TypeScript. Keep it thin - the backend is the project.
 
 | View | Notes |
 |---|---|
@@ -647,7 +647,7 @@ sextant/
 ├── cmake/                       # FetchContent declarations
 ├── include/sextant/             # public headers
 ├── src/
-│   ├── lsm/                     # STANDALONE — own tests, own benchmarks
+│   ├── lsm/                     # STANDALONE - own tests, own benchmarks
 │   │   ├── skiplist.h  memtable.{h,cpp}  wal.{h,cpp}
 │   │   ├── sstable_builder.{h,cpp}  sstable_reader.{h,cpp}  block.{h,cpp}
 │   │   ├── bloom.{h,cpp}  block_cache.{h,cpp}  comparator.h
@@ -675,7 +675,7 @@ sextant/
 │   └── golden_vessels.csv
 ├── web/                         # React app
 ├── docs/
-│   ├── adr/                     # architecture decision records — 1 page each
+│   ├── adr/                     # architecture decision records - 1 page each
 │   ├── BUGS.md                  # keep this. see the interview guide.
 │   └── diagrams/
 └── docker-compose.yml           # Postgres for source C
@@ -699,16 +699,16 @@ sextant/
 | CLI | `CLI11` | subcommands for free |
 | Frontend | Vite, React, TS, TanStack Query, Tailwind, react-force-graph | |
 
-Standard: **C++20**. You want `std::span`, designated initialisers, concepts for the comparator, and `<bit>` for byte-order helpers. Don't reach for C++23 — compiler support will bite you.
+Standard: **C++20**. You want `std::span`, designated initialisers, concepts for the comparator, and `<bit>` for byte-order helpers. Don't reach for C++23 - compiler support will bite you.
 
 ---
 
 ## 14. Deliberate non-goals
 
-State these in your README. Knowing what you *didn't* build, and why, is a maturity signal — and it pre-empts the interviewer catching you out.
+State these in your README. Knowing what you *didn't* build, and why, is a maturity signal - and it pre-empts the interviewer catching you out.
 
 - **No distribution.** Single node. Sharding the LSM and doing distributed ER is a different project.
-- **No ML-based ER.** A hand-tuned Fellegi–Sunter-style scorer is interpretable and tunable on 500 labels. A learned model needs 10⁵ and gives you worse lineage.
+- **No ML-based ER.** A hand-tuned Fellegi-Sunter-style scorer is interpretable and tunable on 500 labels. A learned model needs 10⁵ and gives you worse lineage.
 - **No transactions across entities.** `WriteBatch` gives per-merge atomicity. Full serializable multi-entity transactions are out of scope.
 - **No incremental re-resolution.** Re-ingest triggers a full re-resolve. Incremental ER is a genuinely hard research problem; know that, and be able to sketch how you'd approach it (dirty-cluster tracking).
 - **No auth / multi-tenancy.**
@@ -732,7 +732,7 @@ That last bullet is the one that's actually rare. Put it first.
 
 ## Sources
 
-- [UN/LOCODE — UNECE](https://unece.org/trade/uncefact/unlocode) · [download page](https://unece.org/trade/cefact/unlocode-code-list-country-and-territory) · [column descriptions](https://service.unece.org/trade/locode/Service/LocodeColumn.htm) · [parsed mirror](https://github.com/datasets/un-locode)
-- [Digitraffic marine traffic APIs — Fintraffic](https://www.digitraffic.fi/en/marine-traffic/) · [Swagger](https://meri.digitraffic.fi/swagger/)
+- [UN/LOCODE - UNECE](https://unece.org/trade/uncefact/unlocode) · [download page](https://unece.org/trade/cefact/unlocode-code-list-country-and-territory) · [column descriptions](https://service.unece.org/trade/locode/Service/LocodeColumn.htm) · [parsed mirror](https://github.com/datasets/un-locode)
+- [Digitraffic marine traffic APIs - Fintraffic](https://www.digitraffic.fi/en/marine-traffic/) · [Swagger](https://meri.digitraffic.fi/swagger/)
 - [MarineCadastre.gov vessel traffic (AIS)](https://hub.marinecadastre.gov/datasets/vessel-traffic-ais-1) · [AccessAIS extractor](https://marinecadastre.gov/accessais/) · [NOAA Digital Coast](https://coast.noaa.gov/digitalcoast/data/vesseltraffic.html)
 - [nlohmann/json](https://github.com/nlohmann/json) · [CMake integration](https://json.nlohmann.me/integration/cmake/)

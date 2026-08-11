@@ -7,9 +7,11 @@
 // that fail to shadow, sequence numbers that collide, recovery that reorders
 // writes.
 //
-// When SSTables and compaction land on days 2-4, this test does not change —
-// it just starts exercising a far larger state space. That is the point of
-// writing it on day 1.
+// DAY 2 UPDATE: the write buffer is now set deliberately small, so these same
+// tests force dozens of flushes and the data ends up spread across the
+// memtable and many L0 SSTables at once. Not a line of test LOGIC changed -
+// only the buffer size - and the state space it explores grew enormously.
+// That is the return on having written this on day 1.
 
 #include <gtest/gtest.h>
 
@@ -50,11 +52,21 @@ class DifferentialTest : public ::testing::Test {
   std::unique_ptr<DB> db_;
   ReferenceDB ref_;
 
+  // A small buffer is the whole trick: it turns a memory-only test into one
+  // that continuously flushes, so almost every read has to resolve a key that
+  // may exist in the memtable and in several sstables at different sequence
+  // numbers.
+  static Options TestOptions() {
+    Options opts;
+    opts.write_buffer_size = 32 * 1024;
+    return opts;
+  }
+
   void SetUp() override {
     dbname_ = std::string("difftest_") +
               ::testing::UnitTest::GetInstance()->current_test_info()->name();
     Destroy();
-    ASSERT_TRUE(DB::Open(Options{}, dbname_, &db_).ok());
+    ASSERT_TRUE(DB::Open(TestOptions(), dbname_, &db_).ok());
   }
   void TearDown() override {
     db_.reset();
@@ -75,7 +87,7 @@ class DifferentialTest : public ::testing::Test {
   void Reopen() {
     ASSERT_TRUE(db_->SyncWAL().ok());
     db_.reset();
-    ASSERT_TRUE(DB::Open(Options{}, dbname_, &db_).ok());
+    ASSERT_TRUE(DB::Open(TestOptions(), dbname_, &db_).ok());
   }
 
   // Assert the engine and the reference agree about every key in the space,
@@ -176,6 +188,13 @@ TEST_F(DifferentialTest, RandomOperationsMatchStdMap) {
   }
 
   ASSERT_NO_FATAL_FAILURE(AssertAgreement(key_space));
+
+  // Confirm the run actually exercised the disk path rather than sitting
+  // entirely in memory - otherwise this test would be quietly weaker than it
+  // looks.
+  const Stats s = db_->GetStats();
+  EXPECT_GT(s.flushes, 5u) << "expected many flushes with a 32 KB buffer";
+  EXPECT_GT(s.sstables_probed, 0u) << "expected reads to reach sstables";
 }
 
 // The same idea, but crossing a recovery boundary. Recovery must reconstruct

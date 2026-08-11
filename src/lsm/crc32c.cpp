@@ -8,7 +8,7 @@ namespace {
 // Reflected Castagnoli polynomial.
 constexpr uint32_t kPoly = 0x82F63B78u;
 
-// Built at compile time — no static initialisation order concerns, no runtime
+// Built at compile time - no static initialisation order concerns, no runtime
 // table-generation pass.
 constexpr std::array<uint32_t, 256> MakeTable() {
   std::array<uint32_t, 256> table{};

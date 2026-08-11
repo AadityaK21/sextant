@@ -65,7 +65,7 @@ TEST(InternalKey, UserKeysSortAscending) {
   const std::string a = IKey("aaa", 1, kTypeValue);
   const std::string b = IKey("bbb", 999999, kTypeValue);
 
-  // A high sequence number must not let "bbb" jump ahead of "aaa" — user key
+  // A high sequence number must not let "bbb" jump ahead of "aaa" - user key
   // is always the primary sort field.
   EXPECT_LT(cmp.Compare(Slice(a), Slice(b)), 0);
 }
@@ -122,7 +122,7 @@ TEST(LookupKey, ExposesAllThreeViews) {
   EXPECT_EQ(kValueTypeForSeek, p.type);
 }
 
-// Keys longer than the inline buffer must still work — this exercises the
+// Keys longer than the inline buffer must still work - this exercises the
 // heap-allocation path.
 TEST(LookupKey, HandlesKeysLargerThanInlineBuffer) {
   const std::string big(4096, 'z');

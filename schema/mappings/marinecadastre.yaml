@@ -1,4 +1,4 @@
-# MarineCadastre.gov AIS, loaded into Postgres — the SQL connector.
+# MarineCadastre.gov AIS, loaded into Postgres - the SQL connector.
 #
 # Managed by NOAA + BOEM + USCG. Data since 2015 ships as Zstd-compressed daily
 # CSVs; use the AccessAIS extractor to pull a bounded area and time window

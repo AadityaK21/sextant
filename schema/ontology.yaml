@@ -7,7 +7,7 @@
 #     so adding a type here makes it appear in the UI with zero frontend code
 #   * schema versions can be diffed and reviewed like any other artifact
 #   * `time_index:` on a link declaration is what causes the TIDX keyspace to
-#     be populated — declarative physical layout, not a hardcoded index
+#     be populated - declarative physical layout, not a hardcoded index
 #
 # See docs/ARCHITECTURE.md §6.
 
@@ -24,7 +24,7 @@ entity_types:
       name:        { type: string,   title: true,   fuse: most_trusted }
       locode:      { type: string,   indexed: true, unique_hint: true, fuse: most_trusted,
                      validate: locode_format }
-      alt_names:   { type: string[], fuse: union }
+      alt_names:   { type: "string[]", fuse: union }
       country:     { type: string,   indexed: true, fuse: most_frequent }
       lat:         { type: double,   fuse: numeric_median }
       lon:         { type: double,   fuse: numeric_median }

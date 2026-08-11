@@ -63,7 +63,7 @@ class Slice {
 
   // Bytewise ordering: < 0, == 0, > 0 as *this is <, ==, > than b.
   // This is the total order the whole engine is built on.  It must be a plain
-  // unsigned byte comparison — memcmp gives us exactly that, and it is why the
+  // unsigned byte comparison - memcmp gives us exactly that, and it is why the
   // key encodings in src/codec use big-endian integers.
   int compare(const Slice& b) const noexcept {
     const size_t min_len = size_ < b.size_ ? size_ : b.size_;

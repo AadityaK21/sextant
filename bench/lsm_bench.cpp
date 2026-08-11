@@ -68,15 +68,20 @@ int main(int argc, char** argv) {
   const int value_size = (argc > 2) ? std::atoi(argv[2]) : 100;
   const std::string dbname = "bench_db";
 
+  // Deliberately small so the run actually flushes. A buffer large enough to
+  // hold everything would benchmark the memtable and quietly report nothing
+  // about the storage layer.
+  Options options;
+  options.write_buffer_size = 4u * 1024 * 1024;
+
   std::printf("sextant LSM benchmark\n");
   std::printf("  entries      : %d\n", num);
   std::printf("  value size   : %d bytes\n", value_size);
-  std::printf("  milestone    : day 1 (memtable + WAL, no SSTables)\n\n");
+  std::printf("  write buffer : %.1f MB\n",
+              static_cast<double>(options.write_buffer_size) / (1024 * 1024));
+  std::printf("  milestone    : day 2 (memtable + WAL + L0 SSTables)\n\n");
 
   DestroyDB(dbname);
-
-  Options options;
-  options.write_buffer_size = 64u * 1024 * 1024;
 
   std::unique_ptr<DB> db;
   if (!DB::Open(options, dbname, &db).ok()) {
@@ -144,7 +149,12 @@ int main(int argc, char** argv) {
     ReportLatency("readrandom latency", samples);
   }
 
-  // --- misses (this is where bloom filters will show up on day 3) ----------
+  // --- misses ---------------------------------------------------------------
+  //
+  // This is the line day 3 is aimed at. Right now a miss must be proven absent
+  // by probing EVERY L0 table, since nothing prunes them. Bloom filters turn
+  // most of those probes into a bitmap check that never touches the disk, so
+  // expect this number to move sharply.
   {
     std::vector<double> samples;
     samples.reserve(static_cast<size_t>(num));
@@ -185,12 +195,42 @@ int main(int argc, char** argv) {
   std::printf("  reads          : %llu\n", static_cast<unsigned long long>(session.reads));
   std::printf("  bytes written  : %.2f MB\n",
               static_cast<double>(session.bytes_written) / (1024 * 1024));
-  std::printf("  memtable bytes : %.2f MB\n",
-              static_cast<double>(session.memtable_bytes) / (1024 * 1024));
   std::printf("  sequence       : %llu\n",
               static_cast<unsigned long long>(session.sequence));
-  std::printf("  sequence after recovery : %llu  (must match)\n",
-              static_cast<unsigned long long>(after.sequence));
+
+  std::printf("\nstorage\n");
+  std::printf("  flushes        : %llu\n",
+              static_cast<unsigned long long>(session.flushes));
+  std::printf("  bytes flushed  : %.2f MB\n",
+              static_cast<double>(session.bytes_flushed) / (1024 * 1024));
+  std::printf("  live sstables  : %llu\n",
+              static_cast<unsigned long long>(session.num_sstables));
+  std::printf("  memtable bytes : %.2f MB\n",
+              static_cast<double>(session.memtable_bytes) / (1024 * 1024));
+
+  std::printf("\nread path\n");
+  std::printf("  memtable hits  : %llu\n",
+              static_cast<unsigned long long>(session.memtable_hits));
+  std::printf("  sstable hits   : %llu\n",
+              static_cast<unsigned long long>(session.sstable_hits));
+  std::printf("  sstables probed: %llu",
+              static_cast<unsigned long long>(session.sstables_probed));
+  if (session.reads > 0) {
+    // Tables consulted per read. Today this rises with the number of L0 files,
+    // because nothing prunes them. Bloom filters (day 3) and leveled
+    // compaction (day 4) are both attacks on exactly this number.
+    std::printf("   (%.2f per read)\n",
+                static_cast<double>(session.sstables_probed) /
+                    static_cast<double>(session.reads));
+  } else {
+    std::printf("\n");
+  }
+
+  std::printf("\n  sequence after recovery : %llu  (must match %llu)\n",
+              static_cast<unsigned long long>(after.sequence),
+              static_cast<unsigned long long>(session.sequence));
+  std::printf("  sstables after recovery : %llu\n",
+              static_cast<unsigned long long>(after.num_sstables));
 
   db.reset();
   DestroyDB(dbname);

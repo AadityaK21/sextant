@@ -8,6 +8,13 @@ add_library(sextant_lsm
   env.cpp
   wal.cpp
   write_batch.cpp
+  iterator.cpp
+  format.cpp
+  block_builder.cpp
+  block.cpp
+  table_builder.cpp
+  table.cpp
+  filename.cpp
   db_impl.cpp
 )
 

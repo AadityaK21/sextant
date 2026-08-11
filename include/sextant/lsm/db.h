@@ -2,13 +2,13 @@
 //
 // Deliberately small: this is the contract every layer above codes against
 // (codec, ontology, resolve, lineage, query). Keeping it narrow is what lets
-// the engine's internals change — memtable-only today, SSTables and leveled
-// compaction on day 4 — without touching a line of the ontology layer.
+// the engine's internals change - memtable-only today, SSTables and leveled
+// compaction on day 4 - without touching a line of the ontology layer.
 //
 // MILESTONE STATUS (docs/EXECUTION_PLAN.md)
-//   Day 1  ✅ memtable + WAL + recovery      <- you are here
-//   Day 2  ⬜ SSTable build/read, flush to L0
-//   Day 3  ⬜ bloom filters, block cache, merging iterator, snapshots
+//   Day 1  ✅ memtable + WAL + recovery
+//   Day 2  ✅ SSTable build/read, flush to L0   <- you are here
+//   Day 3  ⬜ bloom filters, block cache, merging iterator
 //   Day 4  ⬜ VersionSet/MANIFEST, leveled compaction
 
 #pragma once
@@ -38,6 +38,13 @@ struct Stats {
   uint64_t memtable_bytes = 0;
   uint64_t wal_records_replayed = 0;
   uint64_t sequence = 0;
+
+  // Day 2
+  uint64_t flushes = 0;          // memtables written out as L0 tables
+  uint64_t bytes_flushed = 0;
+  uint64_t num_sstables = 0;
+  uint64_t sstable_hits = 0;     // reads satisfied from disk
+  uint64_t sstables_probed = 0;  // tables consulted across all reads
 };
 
 class DB {

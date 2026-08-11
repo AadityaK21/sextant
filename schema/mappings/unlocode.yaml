@@ -1,4 +1,4 @@
-# UN/LOCODE — UNECE's code list. The CSV bulk-dump connector, source two.
+# UN/LOCODE - UNECE's code list. The CSV bulk-dump connector, source two.
 #
 # Roughly 110,000 locations, of which only the ones whose Function bitfield has
 # position 1 set are seaports. Filtering on that is itself a nice piece of
@@ -7,7 +7,7 @@
 # Messiness this source contributes:
 #   * names carry diacritics; a NameWoDiacritics column sits alongside
 #   * coordinates are in degree-minute-hemisphere text ("5155N 00430E"),
-#     not decimal — hence the ddmm_to_decimal transform
+#     not decimal - hence the ddmm_to_decimal transform
 #   * the same physical port often has several sub-location entries
 #
 # Highest trust of any source for `locode`: this IS the code authority.

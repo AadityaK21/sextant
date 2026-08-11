@@ -3,7 +3,7 @@
 // Design note for the interview: this is deliberately not exceptions.  A
 // storage engine's hot path (Get, iterator Next) must be allocation-free and
 // branch-predictable, and "key not found" is an ordinary control-flow outcome,
-// not an exceptional one.  Status costs one pointer when OK — the common case
+// not an exceptional one.  Status costs one pointer when OK - the common case
 // allocates nothing at all.
 //
 // The encoding is the LevelDB trick: state_ is nullptr for OK, otherwise a

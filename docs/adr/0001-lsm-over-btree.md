@@ -1,11 +1,11 @@
-# ADR 0001 — LSM tree rather than a B-tree
+# ADR 0001 - LSM tree rather than a B-tree
 
 **Status:** accepted · **Date:** 2026-08-09
 
 ## Context
 
-The engine has to absorb bulk ingest — millions of AIS broadcast rows, port
-records and port calls — and then serve point lookups and, crucially, ordered
+The engine has to absorb bulk ingest - millions of AIS broadcast rows, port
+records and port calls - and then serve point lookups and, crucially, ordered
 range scans for graph traversal.
 
 ## Decision
@@ -15,15 +15,15 @@ A log-structured merge tree.
 ## Rationale
 
 The trade is best framed as the **RUM conjecture**: optimise for **R**ead
-amplification, **U**pdate amplification or **M**emory/space amplification —
+amplification, **U**pdate amplification or **M**emory/space amplification -
 pick two, the third suffers.
 
 |  | B-tree | LSM tree |
 |---|---|---|
-| Writes | In-place update → random I/O; a 100-byte row costs a 4–16 KB page write | Sequential appends, batched |
+| Writes | In-place update → random I/O; a 100-byte row costs a 4-16 KB page write | Sequential appends, batched |
 | Reads | One tree descent | Check memtable + every level; mitigated by bloom filters |
-| Space | Fragmentation, ~50–70% typical fill factor | Obsolete versions linger until compaction |
-| Write amp | Low per operation, but random | High — data is rewritten at each level |
+| Space | Fragmentation, ~50-70% typical fill factor | Obsolete versions linger until compaction |
+| Write amp | Low per operation, but random | High - data is rewritten at each level |
 
 Our workload is write-heavy at ingest and scan-heavy at query. That is the LSM
 sweet spot. A B-tree would win for a read-mostly workload with in-place updates.
@@ -52,5 +52,5 @@ Two secondary reasons that matter specifically here:
 - **B-tree / LMDB-style.** Better point reads, worse ingest, and in-place
   mutation is at odds with the lineage guarantee.
 - **Embed RocksDB.** Would be the correct engineering choice for a product and
-  the wrong one for this project — the storage engine is a deliverable, not a
+  the wrong one for this project - the storage engine is a deliverable, not a
   dependency.

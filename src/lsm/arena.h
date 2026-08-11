@@ -1,7 +1,7 @@
 // Bump allocator for memtable nodes.
 //
 // Why: a memtable holds millions of tiny, immortal allocations (skiplist nodes
-// and key bytes) whose lifetimes are all identical — they die together when
+// and key bytes) whose lifetimes are all identical - they die together when
 // the memtable is flushed.  That is the exact shape an arena is for.  We get
 //   * one allocation per 4 KB block instead of one per node
 //   * no per-node free, no fragmentation, no destructor pass

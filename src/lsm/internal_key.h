@@ -1,4 +1,4 @@
-// The internal key encoding — the single most load-bearing idea in the engine.
+// The internal key encoding - the single most load-bearing idea in the engine.
 //
 //     internal_key = user_key || trailer
 //     trailer      = big-endian uint64 of  (sequence << 8) | value_type
@@ -16,7 +16,7 @@
 //               is what lets an append-only, immutable-file design support
 //               deletion at all.
 //   Snapshots   A snapshot is just a sequence number; a read skips any entry
-//               whose sequence exceeds it.  Nearly free — and load-bearing for
+//               whose sequence exceeds it.  Nearly free - and load-bearing for
 //               graph traversal, which must see a consistent graph across
 //               thousands of key lookups.
 //
