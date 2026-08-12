@@ -12,10 +12,18 @@ namespace {
 class MemTableTest : public ::testing::Test {
  protected:
   InternalKeyComparator cmp_;
-  MemTable mem_{cmp_};
+  // Day 4 made MemTable refcounted with a private destructor, so it can no
+  // longer be a by-value member. Ref on construction, Unref on teardown.
+  MemTable* mem_ = nullptr;
+
+  void SetUp() override {
+    mem_ = new MemTable(cmp_);
+    mem_->Ref();
+  }
+  void TearDown() override { mem_->Unref(); }
 
   void Add(SequenceNumber s, ValueType t, const std::string& k, const std::string& v) {
-    mem_.Add(s, t, Slice(k), Slice(v));
+    mem_->Add(s, t, Slice(k), Slice(v));
   }
 
   // Returns "value", "NOT_FOUND" (tombstone) or "ABSENT" (no entry at all).
@@ -23,7 +31,7 @@ class MemTableTest : public ::testing::Test {
     const LookupKey lk(Slice(key), snapshot);
     std::string value;
     Status s;
-    if (!mem_.Get(lk, &value, &s)) return "ABSENT";
+    if (!mem_->Get(lk, &value, &s)) return "ABSENT";
     if (s.IsNotFound()) return "NOT_FOUND";
     return value;
   }
@@ -38,7 +46,7 @@ TEST_F(MemTableTest, PutAndGet) {
   EXPECT_EQ("Rotterdam", Get("NLRTM", 10));
   EXPECT_EQ("Helsinki", Get("FIHEL", 10));
   EXPECT_EQ("ABSENT", Get("DEHAM", 10));
-  EXPECT_EQ(2u, mem_.NumEntries());
+  EXPECT_EQ(2u, mem_->NumEntries());
 }
 
 TEST_F(MemTableTest, EmptyValueIsDistinctFromAbsent) {
@@ -104,7 +112,7 @@ TEST_F(MemTableTest, IterationIsOrderedByInternalKey) {
   Add(4, kTypeValue, "a", "4");  // newer version of "a"
 
   std::vector<std::pair<std::string, SequenceNumber>> got;
-  MemTable::Iterator it(&mem_);
+  MemTable::Iterator it(mem_);
   for (it.SeekToFirst(); it.Valid(); it.Next()) {
     ParsedInternalKey p;
     ASSERT_TRUE(ParseInternalKey(it.key(), &p));
@@ -126,7 +134,7 @@ TEST_F(MemTableTest, IteratorSeek) {
   AppendInternalKey(&target, ParsedInternalKey(Slice("bb"), kMaxSequenceNumber,
                                                kValueTypeForSeek));
 
-  MemTable::Iterator it(&mem_);
+  MemTable::Iterator it(mem_);
   it.Seek(Slice(target));
   ASSERT_TRUE(it.Valid());
   EXPECT_EQ("bb", ExtractUserKey(it.key()).ToString());
@@ -134,10 +142,10 @@ TEST_F(MemTableTest, IteratorSeek) {
 }
 
 TEST_F(MemTableTest, MemoryUsageGrowsWithData) {
-  const size_t before = mem_.ApproximateMemoryUsage();
+  const size_t before = mem_->ApproximateMemoryUsage();
   for (int i = 0; i < 2000; ++i) {
     Add(static_cast<SequenceNumber>(i + 1), kTypeValue,
         "key" + std::to_string(i), std::string(100, 'v'));
   }
-  EXPECT_GT(mem_.ApproximateMemoryUsage(), before + 2000u * 100u);
+  EXPECT_GT(mem_->ApproximateMemoryUsage(), before + 2000u * 100u);
 }

@@ -55,6 +55,17 @@ struct Stats {
   uint64_t cache_misses = 0;
   uint64_t cache_evictions = 0;
   uint64_t cache_bytes = 0;
+
+  // Day 4
+  uint64_t compactions = 0;
+  uint64_t trivial_moves = 0;            // files relabelled without rewriting bytes
+  uint64_t compaction_bytes_written = 0;
+  uint64_t keys_dropped = 0;             // versions and tombstones reclaimed
+  uint64_t files_deleted = 0;
+  uint64_t write_stalls = 0;             // writers throttled to let compaction catch up
+  uint64_t total_bytes_on_disk = 0;
+  uint64_t files_per_level[7] = {};
+  uint64_t bytes_per_level[7] = {};
 };
 
 class DB {
@@ -96,6 +107,14 @@ class DB {
 
   // Force the WAL to the device. Used at the end of an ingest batch.
   virtual Status SyncWAL() = 0;
+
+  // Block until background flush and compaction are idle.
+  //
+  // Exposed because compaction is asynchronous: without this, a test asserting
+  // "L0 has at most 4 files" would be racing the background thread and would
+  // fail intermittently. Also useful before taking a benchmark reading, so the
+  // measurement is not distorted by work still in flight.
+  virtual void WaitForBackgroundWork() = 0;
 };
 
 }  // namespace sextant::lsm

@@ -82,7 +82,7 @@ int main(int argc, char** argv) {
   std::printf("  bloom        : %d bits/key\n", options.bloom_bits_per_key);
   std::printf("  block cache  : %.1f MB\n",
               static_cast<double>(options.block_cache_size) / (1024 * 1024));
-  std::printf("  milestone    : day 3 (bloom filters + block cache + range pruning)\n\n");
+  std::printf("  milestone    : day 4 (leveled compaction + background work)\n\n");
 
   DestroyDB(dbname);
 
@@ -120,6 +120,25 @@ int main(int argc, char** argv) {
                      static_cast<size_t>(num) * bytes_per_op);
   }
 
+  // --- random writes --------------------------------------------------------
+  //
+  // THIS is the workload leveled compaction exists for, and the realistic one
+  // for Sextant: entity, link and provenance keys interleaved by ULID across
+  // eleven keyspaces, never written in sorted order. Sequential writes produce
+  // disjoint files that need no merging at all, which makes them a flattering
+  // and misleading benchmark.
+  {
+    std::mt19937 rnd(20260809);
+    const auto start = Clock::now();
+    for (int i = 0; i < num; ++i) {
+      db->Put(WriteOptions{},
+              Slice(MakeKey(static_cast<int>(rnd() % static_cast<unsigned>(num)))),
+              Slice(value));
+    }
+    ReportThroughput("fillrandom", num, SecondsSince(start),
+                     static_cast<size_t>(num) * bytes_per_op);
+  }
+
   // --- durable writes: this is what an fsync actually costs ------------------
   {
     const int sync_ops = std::min(num, 2000);
@@ -131,6 +150,15 @@ int main(int argc, char** argv) {
     }
     ReportThroughput("fillsync (sync=true)", sync_ops, SecondsSince(start),
                      static_cast<size_t>(sync_ops) * bytes_per_op);
+  }
+
+  // Let compaction settle before measuring reads. Without this the numbers
+  // describe a database mid-reorganisation rather than a steady state, which
+  // makes them neither reproducible nor meaningful.
+  {
+    const auto start = Clock::now();
+    db->WaitForBackgroundWork();
+    std::printf("%-28s %.3fs\n", "waiting for compaction", SecondsSince(start));
   }
 
   // --- random point reads ---------------------------------------------------
@@ -200,6 +228,37 @@ int main(int argc, char** argv) {
               static_cast<double>(session.bytes_written) / (1024 * 1024));
   std::printf("  sequence       : %llu\n",
               static_cast<unsigned long long>(session.sequence));
+
+  std::printf("\ncompaction\n");
+  std::printf("  compactions    : %llu\n",
+              static_cast<unsigned long long>(session.compactions));
+  std::printf("  trivial moves  : %llu\n",
+              static_cast<unsigned long long>(session.trivial_moves));
+  std::printf("  bytes rewritten: %.2f MB\n",
+              static_cast<double>(session.compaction_bytes_written) / (1024 * 1024));
+  std::printf("  keys dropped   : %llu\n",
+              static_cast<unsigned long long>(session.keys_dropped));
+  std::printf("  files deleted  : %llu\n",
+              static_cast<unsigned long long>(session.files_deleted));
+  std::printf("  write stalls   : %llu\n",
+              static_cast<unsigned long long>(session.write_stalls));
+  if (session.bytes_written > 0) {
+    // Write amplification: bytes actually put on disk per byte the caller
+    // handed us. This is the price of leveled compaction, and the number an
+    // interviewer will ask for.
+    std::printf("  write amp      : %.2fx\n",
+                static_cast<double>(session.bytes_flushed +
+                                    session.compaction_bytes_written) /
+                    static_cast<double>(session.bytes_written));
+  }
+
+  std::printf("\nlevel structure\n");
+  for (int i = 0; i < 7; ++i) {
+    if (session.files_per_level[i] == 0) continue;
+    std::printf("  L%d: %4llu files  %8.2f MB\n", i,
+                static_cast<unsigned long long>(session.files_per_level[i]),
+                static_cast<double>(session.bytes_per_level[i]) / (1024 * 1024));
+  }
 
   std::printf("\nstorage\n");
   std::printf("  flushes        : %llu\n",

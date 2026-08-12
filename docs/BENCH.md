@@ -231,6 +231,71 @@ Building a bloom filter costs one hash and seven bit-sets per key at flush time.
 
 ---
 
+---
+
+## Day 4 - leveled compaction and background work
+
+Same 200,000 entries, 100-byte values, 4 MB write buffer. A **random-write
+phase was added** because sequential writes produce disjoint files that need no
+merging at all, which makes them a flattering and misleading benchmark for a
+compaction milestone.
+
+| Benchmark | Day 3 | Day 4 | Change |
+|---|---|---|---|
+| `fillseq` | 568,780 ops/sec | **793,902 ops/sec** | **+40%** |
+| `fillbatch` | 811,813 ops/sec | **1,527,101 ops/sec** | **+88%** |
+| `fillrandom` | - | 492,386 ops/sec | new |
+| `readrandom` | 146,253 ops/sec | 98,910 ops/sec | see below |
+| `readmissing` | 4,604,622 ops/sec | 3,723,260 ops/sec | ≈ |
+
+```
+compactions   : 3          bytes rewritten : 24.04 MB
+keys dropped  : 64,216     files deleted   : 35
+write stalls  : 4          write amplification : 1.20x
+
+L0:  3 files   8.51 MB
+L1:  4 files   7.05 MB
+L2: 17 files  42.90 MB
+```
+
+### Writes got 40-88% faster, which is the real headline
+
+Day 3 flushed synchronously while holding the write mutex, so every 4 MB a
+writer stopped dead for the duration of building and fsyncing a 3 MB SSTable.
+Day 4 moves that to a background thread and writers keep going.
+
+That is not free work disappearing - it is work relocating. The honest
+accounting is the **4 write stalls**: when ingest outruns compaction, the
+engine deliberately throttles writers (1 ms delay at 8 L0 files, hard block at
+12). Backpressure is a feature. Without it, L0 grows without bound, read
+amplification climbs back toward day-2 numbers, and eventually the disk fills.
+
+### The readrandom comparison is not apples to apples
+
+Day 3's 146k was measured over a database built by sequential writes only.
+Day 4's 98.9k is measured after sequential *and* random writes, which leaves
+overlapping L0 files and a genuinely harder lookup. Reporting it as a 32%
+regression would be dishonest; the workload changed. What can be said is that
+`readmissing` held at 3.7M/sec, so the filters are still doing their job.
+
+### Write amplification is 1.20x, and that number is the point
+
+Every byte the caller wrote resulted in 1.20 bytes reaching disk: 65.6 MB
+flushed plus 24.0 MB rewritten by compaction, against 74.6 MB of logical
+writes. That is the price of keeping levels sorted, and it is the number to
+have ready when someone asks what leveled compaction costs.
+
+For comparison, pure sequential writes give **0.87x** - below 1.0, because
+compaction never has to run and obsolete versions are dropped at flush time.
+
+### 64,216 keys dropped
+
+Obsolete versions and tombstones reclaimed during compaction. Without this the
+database would grow monotonically with every overwrite, regardless of how much
+data is actually live.
+
+---
+
 ## Milestone summary
 
 | Milestone | fillseq | readrandom | p99 read | readmissing | recovery |
@@ -238,9 +303,13 @@ Building a bloom filter costs one hash and seven bit-sets per key at flush time.
 | Day 1 - memtable + WAL | 673k/s | 935k/s | 2.37 µs | 6.6M/s | 0.233 s |
 | Day 2 - L0 SSTables | 599k/s | 10.9k/s | 177 µs | 8.5k/s | 0.008 s |
 | Day 3 - filters + cache | 569k/s | 146k/s | 17.1 µs | 4.6M/s | 0.008 s |
-| Day 4 - leveled compaction | | | | | target: <=1 file per level |
+| Day 4 - leveled compaction | **794k/s** | 99k/s* | 25.6 µs* | 3.7M/s | 0.018 s |
 
-Reads are still 6x below the day-1 memory-only figure, which is the correct
-place to be: the data is on disk now. Closing more of that gap is what leveled
-compaction is for, since it bounds the number of files a lookup can touch
-instead of leaving it proportional to how many flushes have happened.
+\* measured on a harder workload than day 3 - see above.
+
+The shape of the four days is worth reading as a whole. Day 2 traded an 86x
+read regression for durability. Day 3 bought most of it back with filters that
+cost 5% of write throughput. Day 4 bounded read amplification structurally and
+gave back the write throughput day 2 took, at the cost of 1.20x write
+amplification and the need for backpressure. Every step was a trade, and none
+of them was free.

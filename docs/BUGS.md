@@ -57,6 +57,80 @@ before the Windows CI job finds it for you.
 
 ---
 
+## Shutdown mid-compaction resurrected deleted data          2026-08-09
+
+**Symptom.** `DifferentialTest.StateSurvivesRepeatedReopen` failed under ASan
+only, and only sometimes: `key 'k32' should be absent but Get returned
+'pbaluxevgjcbtaaowyiudjcpxamibrtfoqumrzze'`. A key that had been deleted came
+back after a reopen, with a value from thousands of operations earlier.
+
+**Root cause.** The compaction loop polls `shutting_down_` so it can bail out
+when the DB is being destroyed:
+
+```cpp
+for (; input->Valid() && !shutting_down_;) { ... }
+```
+
+but nothing checked that flag *after* the loop. So on shutdown the compaction
+exited early with only part of its input written, and then went straight on to
+`FinishCompactionOutputFile` and `InstallCompactionResults` - committing a
+MANIFEST edit that **deleted all the input files** while the output contained
+only the keys processed before the interrupt.
+
+If one of the keys not yet written was a tombstone, the value it had been
+shadowing in a lower level became visible again. Deleted data, silently
+restored, with no error anywhere.
+
+Only ASan reproduced it because the sanitiser slows compaction enough that
+`db_.reset()` reliably lands in the middle of one. In the release build the
+compaction usually finished first.
+
+**Fix.** Treat shutdown as a failure of the compaction:
+
+```cpp
+if (shutting_down_.load(std::memory_order_relaxed)) {
+  status = Status::IOError("compaction abandoned: database is shutting down");
+}
+```
+
+so the results are discarded and the input files stay live. Also made
+`shutting_down_` atomic - the compaction loop reads it with the mutex released,
+so the plain `bool` was a data race as well.
+
+**Lesson.** A partial compaction is worse than no compaction. Anything that can
+interrupt a multi-step commit needs a check at the COMMIT point, not only at
+the loop condition - bailing out of the work is meaningless if you then publish
+the half-finished result anyway. This is also the strongest argument for the
+differential test existing: no unit test would have thought to kill a database
+during a compaction and then check whether a specific deleted key came back.
+
+---
+
+## Iterators pinned the file set but not the memtable          2026-08-09
+
+**Symptom.** `CompactionTest.IteratorSurvivesConcurrentCompaction` segfaulted.
+The test opens an iterator, writes 20,000 more keys to force flushes and
+compactions, then walks the iterator.
+
+**Root cause.** Day 4 introduced refcounted `Version` objects precisely so an
+open iterator could pin the SSTables it was reading. That worked. But the same
+iterator also holds a `MemTable::Iterator` pointing directly into the
+memtable's arena, and `mem_` / `imm_` were plain `unique_ptr`. A flush moved
+the memtable to `imm_`, wrote it out, and destroyed it - freeing the arena the
+open iterator was still walking.
+
+**Fix.** Made `MemTable` refcounted with a private destructor, the same pattern
+as `Version`, and had `NewIterator` `Ref()` both memtables and register an
+`Unref` cleanup.
+
+**Lesson.** Solving a lifetime problem for one resource does not solve it for
+the others in the same object. The fix on day 4 was framed as "pin the file
+set", and that framing hid the fact that an iterator reads from *two* kinds of
+storage. Worth asking, whenever adding a refcount: what else does this thing
+point at?
+
+---
+
 ## One field, two representations, size_t underflow          2026-08-09
 
 **Symptom.** Seven of the new iteration tests died with

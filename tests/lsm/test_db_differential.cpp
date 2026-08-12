@@ -192,6 +192,7 @@ TEST_F(DifferentialTest, RandomOperationsMatchStdMap) {
   // Confirm the run actually exercised the disk path rather than sitting
   // entirely in memory - otherwise this test would be quietly weaker than it
   // looks.
+  db_->WaitForBackgroundWork();
   const Stats s = db_->GetStats();
   EXPECT_GT(s.flushes, 5u) << "expected many flushes with a 32 KB buffer";
   EXPECT_GT(s.sstables_probed, 0u) << "expected reads to reach sstables";

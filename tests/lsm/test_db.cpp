@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "env.h"
+#include "filename.h"
 
 using namespace sextant::lsm;
 
@@ -229,9 +230,26 @@ TEST_F(DBTest, RecoversFromTornWALTail) {
   }
   db_.reset();  // close cleanly, then damage the tail
 
-  const std::string wal_path = dbname_ + "/000001.log";
+  // Day 4 assigns log numbers from the VersionSet counter and rotates the log
+  // on open, so the current log is no longer always 000001.log. Find it.
+  std::vector<std::string> children;
+  ASSERT_TRUE(GetChildren(dbname_, &children).ok());
+  std::string wal_path;
+  uint64_t highest = 0;
+  for (const auto& c : children) {
+    uint64_t number = 0;
+    FileType type;
+    if (ParseFileName(c, &number, &type) && type == FileType::kLog &&
+        number >= highest) {
+      highest = number;
+      wal_path = dbname_ + "/" + c;
+    }
+  }
+  ASSERT_FALSE(wal_path.empty()) << "no log file found";
+
   uint64_t size = 0;
   ASSERT_TRUE(GetFileSize(wal_path, &size).ok());
+  ASSERT_GT(size, 3u);
   ASSERT_TRUE(TruncateFile(wal_path, size - 3).ok());
 
   Options opts;

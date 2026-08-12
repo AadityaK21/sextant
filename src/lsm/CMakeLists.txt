@@ -17,9 +17,12 @@ add_library(sextant_lsm
   cache.cpp
   table_builder.cpp
   table.cpp
+  table_cache.cpp
   merger.cpp
   db_iter.cpp
   filename.cpp
+  version_edit.cpp
+  version_set.cpp
   db_impl.cpp
 )
 

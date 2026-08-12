@@ -43,6 +43,22 @@ class MemTable {
   MemTable(const MemTable&) = delete;
   MemTable& operator=(const MemTable&) = delete;
 
+  // REFERENCE COUNTED, for the same reason Version is.
+  //
+  // An open iterator points directly into this memtable's arena. Meanwhile a
+  // writer can freeze it (mem_ becomes imm_) and the background thread can
+  // flush and then destroy it. Without a refcount that is a use-after-free
+  // that only appears when a scan happens to overlap a flush - rare, timing
+  // dependent, and extremely unpleasant to debug.
+  //
+  // The destructor is private so the only way to release one is Unref().
+  void Ref() { ++refs_; }
+  void Unref() {
+    --refs_;
+    assert(refs_ >= 0);
+    if (refs_ <= 0) delete this;
+  }
+
   // Bytes of arena in use.  The DB compares this against
   // Options::write_buffer_size to decide when to freeze and flush.
   size_t ApproximateMemoryUsage() const { return arena_.MemoryUsage(); }
@@ -83,6 +99,9 @@ class MemTable {
   lsm::Iterator* NewIterator() const;
 
  private:
+  ~MemTable() { assert(refs_ == 0); }
+
+  int refs_ = 0;
   KeyComparator key_comparator_;
   Arena arena_;
   Table table_;

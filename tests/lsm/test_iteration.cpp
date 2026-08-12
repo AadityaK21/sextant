@@ -112,6 +112,7 @@ TEST_F(IterationTest, ScanMatchesStdMapAcrossManySSTables) {
     ASSERT_TRUE(Put(k, v).ok());
     reference[k] = v;
   }
+  db_->WaitForBackgroundWork();
   ASSERT_GT(db_->GetStats().flushes, 3u) << "test must span several sstables";
 
   const auto scanned = ScanAll();
