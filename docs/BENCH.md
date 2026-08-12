@@ -161,11 +161,86 @@ at any size.
 
 ---
 
+## Day 3 - bloom filters, block cache, key-range pruning
+
+Same 200,000 entries, 100-byte values, 4 MB write buffer, 15 L0 tables.
+10 bits/key bloom, 8 MB block cache.
+
+| Benchmark | Day 2 | Day 3 | Change |
+|---|---|---|---|
+| `readrandom` | 10,861 ops/sec | **146,253 ops/sec** | **13.5x faster** |
+| `readrandom` p99 | 176.99 µs | **17.08 µs** | **10x better** |
+| `readmissing` | 8,478 ops/sec | **4,604,622 ops/sec** | **543x faster** |
+| sstables probed per read | 13.29 | **0.50** | |
+| `fillseq` | 599,416 ops/sec | 568,780 ops/sec | -5% |
+| `fillbatch` | 854,953 ops/sec | 811,813 ops/sec | -5% |
+
+```
+range rejects  : 5,115,884        bloom rejects : 0
+cache hit rate : 36.3%            cache bytes   : 7.95 MB
+```
+
+### The most interesting number here is `bloom rejects: 0`
+
+The bloom filters did nothing in this benchmark, and understanding why is worth
+more than the speedup itself.
+
+Three filters run in order, cheapest first:
+
+1. **key range** - is the key inside this file's `[smallest, largest]`? Two
+   comparisons against memory. No I/O.
+2. **bloom filter** - does this block definitely not contain the key? Seven bit
+   tests. No I/O.
+3. **block cache** - is the decoded block already in memory? A hash lookup.
+
+The benchmark writes keys in ascending order, so **each L0 file covers a
+disjoint key range**. The very first check therefore eliminates every
+non-candidate file, and the bloom filter is never consulted. `readmissing`
+probes keys that sort before every file, so it rejects all 15 files without a
+single byte of I/O, which is why it is back to within 30% of the day-1
+memory-only figure.
+
+That is a real result, not a defect - the cheapest filter was sufficient for
+this access pattern. But it means **the benchmark is not evidence the bloom
+filter works**, so two tests cover the case it does not:
+
+- `FlushTest.SequentialWritesArePrunedByKeyRange` - asserts under 3 files
+  probed per read when ranges are disjoint
+- `FlushTest.OverlappingRangesArePrunedByBloomFilter` - writes keys in random
+  order so every file spans the whole key space, making range pruning useless,
+  and asserts `filter_rejections > 0`
+
+The second is the realistic case for this project. Sextant's keys are entity,
+link and provenance records interleaved by ULID across eleven keyspaces - not
+written in sorted order. In production the bloom filter will be doing the work
+that key ranges do here.
+
+### The cache hit rate is 36%, and that is roughly the ceiling
+
+`readrandom` touches 200,000 keys uniformly across 42 MB of tables with an 8 MB
+cache. With a uniform random access pattern and a cache holding under a fifth of
+the data, ~20-35% is about what LRU can achieve; there is no locality to exploit.
+125,461 evictions against 200,000 reads says the cache is thrashing, which is the
+honest reading. A real workload with skew would do far better, and the fix for a
+uniform one is a bigger cache, not a smarter policy.
+
+### Writes lost another 5%
+
+Building a bloom filter costs one hash and seven bit-sets per key at flush time.
+5% of write throughput for a 13.5x read improvement is not a close call.
+
+---
+
 ## Milestone summary
 
-| Milestone | fillseq | readrandom | p99 read | recovery | notes |
+| Milestone | fillseq | readrandom | p99 read | readmissing | recovery |
 |---|---|---|---|---|---|
-| Day 1 - memtable + WAL | 673k/s | 935k/s | 2.37 µs | 0.233 s | all in memory |
-| Day 2 - L0 SSTables | 599k/s | 10.9k/s | 177 µs | 0.008 s | 13.3 tables probed/read |
-| Day 3 - bloom + block cache | | | | | target: `readmissing` recovers |
-| Day 4 - leveled compaction | | | | | target: ≤1 file per level |
+| Day 1 - memtable + WAL | 673k/s | 935k/s | 2.37 µs | 6.6M/s | 0.233 s |
+| Day 2 - L0 SSTables | 599k/s | 10.9k/s | 177 µs | 8.5k/s | 0.008 s |
+| Day 3 - filters + cache | 569k/s | 146k/s | 17.1 µs | 4.6M/s | 0.008 s |
+| Day 4 - leveled compaction | | | | | target: <=1 file per level |
+
+Reads are still 6x below the day-1 memory-only figure, which is the correct
+place to be: the data is on disk now. Closing more of that gap is what leveled
+compaction is for, since it bounds the number of files a lookup can touch
+instead of leaving it proportional to how many flushes have happened.

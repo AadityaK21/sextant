@@ -37,6 +37,11 @@ class Table {
 
   Iterator* NewIterator(const ReadOptions& options) const;
 
+  // How many lookups this table answered from its bloom filter without
+  // touching a data block. Surfaced in DB stats so the filter's value is
+  // measurable rather than assumed.
+  uint64_t FilterRejections() const;
+
   // Point lookup. Calls handle_result(arg, key, value) at most once, for the
   // first entry at or after key. Cheaper than building an iterator because it
   // does not have to support movement.
@@ -50,6 +55,8 @@ class Table {
   struct Rep;
 
   explicit Table(Rep* rep) : rep_(rep) {}
+
+  void ReadFilter(const ReadOptions& options);
 
   static Iterator* BlockReader(void* arg, const ReadOptions& options,
                                const Slice& index_value);

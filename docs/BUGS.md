@@ -57,6 +57,32 @@ before the Windows CI job finds it for you.
 
 ---
 
+## One field, two representations, size_t underflow          2026-08-09
+
+**Symptom.** Seven of the new iteration tests died with
+`C++ exception with description "basic_string::_M_create"`, and several were
+killed outright by the harness after allocating wildly. Even
+`IterationTest.MemtableOnly` - three keys, no sstables - failed.
+
+**Root cause.** `DBIter::saved_key_` held a **user** key everywhere except in
+`Seek`, which overwrote it with an **internal** key (user key plus an 8-byte
+trailer). `Next` then called `ExtractUserKey(saved_key_)` to recover the user
+key, which does `Slice(data, size - 8)`. On a 1-byte key like `"a"` that is
+`1 - 8` in `size_t` arithmetic: not -7, but 18446744073709551609. The Slice
+happily described a 16-exabyte string, and `ToString()` threw.
+
+**Fix.** `saved_key_` now holds a user key at all times; `Seek` builds its
+internal-key target in a separate `seek_scratch_` buffer.
+
+**Lesson.** The bug was not the arithmetic, it was letting one variable mean two
+different things depending on which method last touched it. Unsigned
+underflow just made the consequence loud instead of subtle - if `size_t` had
+been signed, this would have been a quiet out-of-bounds read that passed the
+tests. Naming the field `saved_user_key_` would have made the mistake visible at
+the call site.
+
+---
+
 ## An assertion encoded the wrong ordering, and only Debug knew          2026-08-09
 
 **Symptom.** The whole day-2 suite passed in `RelWithDebInfo` - 98/98. The same

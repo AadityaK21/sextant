@@ -12,8 +12,13 @@ add_library(sextant_lsm
   format.cpp
   block_builder.cpp
   block.cpp
+  bloom.cpp
+  filter_block.cpp
+  cache.cpp
   table_builder.cpp
   table.cpp
+  merger.cpp
+  db_iter.cpp
   filename.cpp
   db_impl.cpp
 )

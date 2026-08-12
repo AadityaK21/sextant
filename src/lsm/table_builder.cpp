@@ -8,7 +8,15 @@
 namespace sextant::lsm {
 
 TableBuilder::TableBuilder(const Options& options, WritableFile* file)
-    : options_(options), file_(file) {}
+    : options_(options),
+      file_(file),
+      data_block_(options.block_restart_interval),
+      index_block_(options.block_restart_interval) {
+  if (options_.filter_policy != nullptr) {
+    filter_block_ = std::make_unique<FilterBlockBuilder>(options_.filter_policy);
+    filter_block_->StartBlock(0);
+  }
+}
 
 TableBuilder::~TableBuilder() { assert(closed_); }
 
@@ -22,10 +30,6 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
 
   // The previous data block is complete, and we now know a key that is greater
   // than everything in it - so its index entry can finally be written.
-  //
-  // Using the FIRST key of the new block as the separator (rather than the last
-  // key of the old one) keeps the index entry as small as it can be while still
-  // satisfying the invariant "index key >= every key in the block it names".
   if (pending_index_entry_) {
     assert(data_block_.empty());
     std::string handle_encoding;
@@ -34,11 +38,18 @@ void TableBuilder::Add(const Slice& key, const Slice& value) {
     pending_index_entry_ = false;
   }
 
+  // The filter indexes USER keys. A lookup asks "does this table hold user key
+  // K?" without knowing which sequence numbers exist, so hashing the internal
+  // key would make every probe miss.
+  if (filter_block_) {
+    filter_block_->AddKey(ExtractUserKey(key));
+  }
+
   last_key_.assign(key.data(), key.size());
   ++num_entries_;
   data_block_.Add(key, value);
 
-  if (data_block_.CurrentSizeEstimate() >= kDefaultBlockSize) {
+  if (data_block_.CurrentSizeEstimate() >= options_.block_size) {
     Flush();
   }
 }
@@ -52,6 +63,7 @@ void TableBuilder::Flush() {
   if (ok()) {
     pending_index_entry_ = true;
     status_ = file_->Flush();
+    if (filter_block_) filter_block_->StartBlock(offset_);
   }
 }
 
@@ -89,14 +101,31 @@ Status TableBuilder::Finish() {
   assert(!closed_);
   closed_ = true;
 
-  // Metaindex: empty for now. Day 3 puts the bloom filter handle here. Writing
-  // the (empty) block today means adding filters later does not change the
-  // file layout.
+  BlockHandle filter_block_handle;
   BlockHandle metaindex_block_handle;
   BlockHandle index_block_handle;
 
+  // The filter block is written raw - it has its own internal structure and is
+  // not a sorted key/value block, so it never goes through BlockBuilder.
+  if (ok() && filter_block_) {
+    WriteRawBlock(filter_block_->Finish(), kNoCompression, &filter_block_handle);
+  }
+
+  // The metaindex maps a metadata name to a handle. Today that is only the
+  // filter; keeping it a real block means adding more later costs nothing.
   if (ok()) {
-    BlockBuilder meta_index_block;
+    BlockBuilder meta_index_block(options_.block_restart_interval);
+    if (filter_block_) {
+      // Metaindex keys must satisfy the InternalKeyComparator like any other
+      // block key, so a trailer is appended to make it a well-formed internal
+      // key rather than a bare string.
+      std::string key;
+      AppendInternalKey(&key, ParsedInternalKey(Slice(kFilterBlockKey),
+                                                kMaxSequenceNumber, kTypeValue));
+      std::string handle_encoding;
+      filter_block_handle.EncodeTo(&handle_encoding);
+      meta_index_block.Add(Slice(key), Slice(handle_encoding));
+    }
     WriteBlock(&meta_index_block, &metaindex_block_handle);
   }
 

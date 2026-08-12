@@ -79,7 +79,10 @@ int main(int argc, char** argv) {
   std::printf("  value size   : %d bytes\n", value_size);
   std::printf("  write buffer : %.1f MB\n",
               static_cast<double>(options.write_buffer_size) / (1024 * 1024));
-  std::printf("  milestone    : day 2 (memtable + WAL + L0 SSTables)\n\n");
+  std::printf("  bloom        : %d bits/key\n", options.bloom_bits_per_key);
+  std::printf("  block cache  : %.1f MB\n",
+              static_cast<double>(options.block_cache_size) / (1024 * 1024));
+  std::printf("  milestone    : day 3 (bloom filters + block cache + range pruning)\n\n");
 
   DestroyDB(dbname);
 
@@ -225,6 +228,25 @@ int main(int argc, char** argv) {
   } else {
     std::printf("\n");
   }
+
+  std::printf("\nread-path filters (each rejection is a disk read avoided)\n");
+  std::printf("  range rejects  : %llu\n",
+              static_cast<unsigned long long>(session.range_rejections));
+  std::printf("  bloom rejects  : %llu\n",
+              static_cast<unsigned long long>(session.filter_rejections));
+  std::printf("  cache hits     : %llu\n",
+              static_cast<unsigned long long>(session.cache_hits));
+  std::printf("  cache misses   : %llu\n",
+              static_cast<unsigned long long>(session.cache_misses));
+  if (session.cache_hits + session.cache_misses > 0) {
+    std::printf("  cache hit rate : %.1f%%\n",
+                100.0 * static_cast<double>(session.cache_hits) /
+                    static_cast<double>(session.cache_hits + session.cache_misses));
+  }
+  std::printf("  cache evictions: %llu\n",
+              static_cast<unsigned long long>(session.cache_evictions));
+  std::printf("  cache bytes    : %.2f MB\n",
+              static_cast<double>(session.cache_bytes) / (1024 * 1024));
 
   std::printf("\n  sequence after recovery : %llu  (must match %llu)\n",
               static_cast<unsigned long long>(after.sequence),

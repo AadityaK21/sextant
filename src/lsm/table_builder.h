@@ -22,6 +22,7 @@
 
 #include "block_builder.h"
 #include "env.h"
+#include "filter_block.h"
 #include "format.h"
 #include "internal_key.h"
 #include "sextant/lsm/options.h"
@@ -54,8 +55,9 @@ class TableBuilder {
   uint64_t NumEntries() const { return num_entries_; }
   uint64_t FileSize() const { return offset_; }
 
-  // Cut a data block once it reaches roughly this many bytes.
-  static constexpr size_t kDefaultBlockSize = 4096;
+  // Metaindex key under which the filter block handle is stored. Prefixed so
+  // that other metadata blocks can be added later without collision.
+  static constexpr const char* kFilterBlockKey = "filter.sextant.BuiltinBloomFilter";
 
  private:
   bool ok() const { return status_.ok(); }
@@ -70,6 +72,9 @@ class TableBuilder {
   InternalKeyComparator comparator_{};
   BlockBuilder data_block_;
   BlockBuilder index_block_;
+
+  // Null when options.filter_policy is null, i.e. filters disabled.
+  std::unique_ptr<FilterBlockBuilder> filter_block_;
 
   std::string last_key_;
   uint64_t num_entries_ = 0;

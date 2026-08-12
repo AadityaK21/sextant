@@ -1,45 +1,48 @@
-// Day-2 DB: memtable + WAL + L0 SSTables.
+// Day-3 DB: memtable + WAL + L0 SSTables + bloom filters + block cache.
 //
-// THE READ PATH now has to consult several places, in a strict order:
+// THE READ PATH, in the order things are consulted and why:
 //
-//   memtable ->  immutable memtable ->  L0 tables, NEWEST FIRST
+//   memtable  ->  immutable memtable  ->  L0 tables, NEWEST FIRST
 //
-// Order is not an optimisation, it is correctness. The same user key may exist
-// in all of them at different sequence numbers, and the first hit wins. Search
-// an older table first and a stale value shadows a fresh one - or worse, a
-// deleted key comes back to life because you found its old value before its
-// tombstone.
+// Order is correctness, not optimisation. The same user key may exist in all
+// of them at different sequence numbers, and the first hit wins. Search an
+// older table first and a stale value shadows a fresh one - or worse, a deleted
+// key returns because you found its old value before its tombstone. This is
+// also why MemTable::Get returns true for a tombstone: "found a deletion" must
+// stop the search.
 //
-// This is also why MemTable::Get returns true for a tombstone. "Found a
-// deletion" must stop the search; treating it as "not here, keep looking" would
-// resurrect the value from the level below.
+// DAY 3 ADDS THREE FILTERS, cheapest first. Each one exists to avoid the layer
+// below it, and each is measured in Stats:
 //
-// CRASH SAFETY OF A FLUSH. The steps are ordered so that a crash at any point
-// leaves a consistent database:
+//   1. key range     is the key inside this file's [smallest, largest]?
+//                    Two comparisons against memory. Zero I/O.
+//   2. bloom filter  does this data block definitely not contain the key?
+//                    Seven bit tests. Zero I/O. ~0.8% false positive rate.
+//   3. block cache   have we already decoded this block?
+//                    A hash lookup. Zero I/O.
 //
+// Only if all three decline does the engine touch the disk.
+//
+// CRASH SAFETY OF A FLUSH is unchanged from day 2:
 //   1. freeze the memtable, open a NEW log            (old log still on disk)
 //   2. write the SSTable and fsync it                 (not yet referenced)
 //   3. write DESCRIPTOR atomically  <-- COMMIT POINT
 //   4. delete the old log
-//
-//   crash between 1 and 3: the sstable is an orphan, the data is still in the
-//     old log, and recovery replays it. Correct.
-//   crash between 3 and 4: the descriptor already names the new log, so the
-//     old one is ignored. Correct.
-//
-// Everything here is synchronous, including the flush, which blocks the writer.
-// Day 4 moves it to a background thread; the ordering above does not change.
 
 #include <algorithm>
 #include <atomic>
 #include <mutex>
 #include <vector>
 
+#include "bloom.h"
+#include "cache.h"
 #include "crc32c.h"
+#include "db_iter.h"
 #include "env.h"
 #include "filename.h"
 #include "internal_key.h"
 #include "memtable.h"
+#include "merger.h"
 #include "sextant/lsm/db.h"
 #include "table.h"
 #include "table_builder.h"
@@ -47,6 +50,10 @@
 
 namespace sextant::lsm {
 namespace {
+
+// Bumped when the descriptor layout changes. An older descriptor is rejected
+// with a clear error rather than silently misparsed.
+constexpr uint32_t kDescriptorVersion = 2;
 
 class SnapshotImpl : public Snapshot {
  public:
@@ -69,9 +76,17 @@ class LogReporter : public wal::Reader::Reporter {
   }
 };
 
-// One L0 table: its file number and the open reader.
+// One L0 table: the open reader plus the key range it covers.
+//
+// The range is what lets a read skip a file with no I/O whatsoever. In a
+// write-mostly-sequential workload - which is exactly what bulk ingest looks
+// like - each L0 file covers a disjoint span, so this alone eliminates almost
+// every probe.
 struct FileEntry {
   uint64_t number = 0;
+  uint64_t file_size = 0;
+  std::string smallest;  // smallest internal key in the file
+  std::string largest;   // largest internal key in the file
   std::unique_ptr<Table> table;
 };
 
@@ -111,9 +126,10 @@ void SaveValue(void* arg, const Slice& ikey, const Slice& v) {
 
 // Write a memtable out as a sorted table. The memtable iterator is already in
 // internal-key order, so this is a single forward pass with no sorting and no
-// seeking.
+// seeking. Also records the key range, which the read path uses to prune.
 Status BuildTable(const std::string& dbname, const Options& options, MemTable* mem,
-                  uint64_t number, uint64_t* file_size, uint64_t* num_entries) {
+                  uint64_t number, uint64_t* file_size, uint64_t* num_entries,
+                  std::string* smallest, std::string* largest) {
   const std::string fname = TableFileName(dbname, number);
 
   std::unique_ptr<WritableFile> file;
@@ -122,9 +138,13 @@ Status BuildTable(const std::string& dbname, const Options& options, MemTable* m
 
   TableBuilder builder(options, file.get());
   uint64_t count = 0;
+  smallest->clear();
+  largest->clear();
 
   MemTable::Iterator it(mem);
   for (it.SeekToFirst(); it.Valid(); it.Next()) {
+    if (count == 0) smallest->assign(it.key().data(), it.key().size());
+    largest->assign(it.key().data(), it.key().size());
     builder.Add(it.key(), it.value());
     ++count;
   }
@@ -156,12 +176,23 @@ class DBImpl final : public DB {
  public:
   DBImpl(const Options& options, std::string dbname)
       : options_(options), dbname_(std::move(dbname)), internal_comparator_{} {
+    if (options_.bloom_bits_per_key > 0) {
+      filter_policy_ =
+          std::make_unique<BloomFilterPolicy>(options_.bloom_bits_per_key);
+      options_.filter_policy = filter_policy_.get();
+    }
+    if (options_.block_cache_size > 0) {
+      block_cache_ = Cache::NewLRUCache(options_.block_cache_size);
+      options_.block_cache = block_cache_.get();
+    }
     mem_ = std::make_unique<MemTable>(internal_comparator_);
   }
 
   ~DBImpl() override {
     if (log_writer_) log_writer_->Sync();
     if (logfile_) logfile_->Close();
+    // Tables hold cache handles; destroy them before the cache itself.
+    files_.clear();
   }
 
   Status Recover();
@@ -240,24 +271,30 @@ class DBImpl final : public DB {
     }
 
     // 3. L0 tables, newest first. They overlap in key range, so order matters.
-    //
-    // Every table is probed today. Day 3 adds bloom filters and per-file key
-    // ranges, which is what turns this from O(files) into ~O(1) disk reads.
     ReadOptions table_opts;
     table_opts.verify_checksums = options_.paranoid_checks;
+    table_opts.fill_cache = opts.fill_cache;
 
     // LookupKey::user_key() returns by value, so it must be bound to a named
-    // local before its address is taken - otherwise Saver would hold a pointer
-    // to a destroyed temporary.
+    // local before its address is taken.
     const Slice user_key = lkey.user_key();
 
     for (const auto& f : files_) {
+      // FILTER 1: key range. Two comparisons, no I/O at all. This is strictly
+      // cheaper than the bloom filter and catches the common case where L0
+      // files cover disjoint spans, which is what sequential ingest produces.
+      if (!KeyInFileRange(user_key, f)) {
+        ++stats_.range_rejections;
+        continue;
+      }
+
       Saver saver;
       saver.state = SaverState::kNotFound;
       saver.user_key = &user_key;
       saver.value = value;
 
       ++stats_.sstables_probed;
+      // FILTERS 2 and 3 (bloom, then block cache) live inside InternalGet.
       Status ts = f.table->InternalGet(table_opts, lkey.internal_key(), &saver,
                                        &SaveValue);
       if (!ts.ok()) return ts;
@@ -280,6 +317,35 @@ class DBImpl final : public DB {
     return Status::NotFound(Slice());
   }
 
+  // KNOWN LIMITATION, to be removed on day 4. The returned iterator holds raw
+  // pointers into the current memtable and table set. A flush triggered by a
+  // concurrent writer would destroy them underneath it. Day 4's refcounted
+  // Version pins exactly this state for the life of an iterator. Single
+  // threaded use, which is what the tests and the ingest path do, is safe.
+  std::unique_ptr<Iterator> NewIterator(const ReadOptions& opts) override {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    const SequenceNumber snapshot =
+        (opts.snapshot != nullptr)
+            ? static_cast<const SnapshotImpl*>(opts.snapshot)->sequence()
+            : last_sequence_;
+
+    ReadOptions table_opts;
+    table_opts.verify_checksums = options_.paranoid_checks;
+    table_opts.fill_cache = opts.fill_cache;
+
+    std::vector<Iterator*> children;
+    children.push_back(mem_->NewIterator());
+    if (imm_) children.push_back(imm_->NewIterator());
+    for (const auto& f : files_) {
+      children.push_back(f.table->NewIterator(table_opts));
+    }
+
+    Iterator* merged = NewMergingIterator(internal_comparator_, std::move(children));
+    return std::unique_ptr<Iterator>(
+        NewDBIterator(internal_comparator_, merged, snapshot));
+  }
+
   const Snapshot* GetSnapshot() override {
     std::lock_guard<std::mutex> lock(mutex_);
     return new SnapshotImpl(last_sequence_);
@@ -300,19 +366,40 @@ class DBImpl final : public DB {
     s.memtable_bytes = mem_->ApproximateMemoryUsage();
     s.sequence = last_sequence_;
     s.num_sstables = files_.size();
+
+    for (const auto& f : files_) s.filter_rejections += f.table->FilterRejections();
+
+    if (block_cache_) {
+      s.cache_hits = block_cache_->Hits();
+      s.cache_misses = block_cache_->Misses();
+      s.cache_evictions = block_cache_->Evictions();
+      s.cache_bytes = block_cache_->TotalCharge();
+    }
     return s;
   }
 
  private:
+  bool KeyInFileRange(const Slice& user_key, const FileEntry& f) const {
+    if (f.smallest.empty() || f.largest.empty()) return true;  // unknown; be safe
+    if (user_key.compare(ExtractUserKey(Slice(f.smallest))) < 0) return false;
+    if (user_key.compare(ExtractUserKey(Slice(f.largest))) > 0) return false;
+    return true;
+  }
+
   Status FlushMemTableLocked();
   Status WriteDescriptorLocked();
   Status ReadDescriptor(bool* found);
   Status OpenTable(uint64_t number, std::unique_ptr<Table>* table);
   Status NewLogFileLocked(uint64_t number);
 
-  const Options options_;
+  Options options_;
   const std::string dbname_;
   const InternalKeyComparator internal_comparator_;
+
+  // One policy and one cache shared by every table. Declared before files_ so
+  // they outlive the tables that reference them.
+  std::unique_ptr<BloomFilterPolicy> filter_policy_;
+  std::unique_ptr<Cache> block_cache_;
 
   mutable std::mutex mutex_;
   std::unique_ptr<MemTable> mem_;
@@ -350,8 +437,7 @@ Status DBImpl::NewLogFileLocked(uint64_t number) {
 Status DBImpl::FlushMemTableLocked() {
   if (mem_->NumEntries() == 0) return Status::OK();
 
-  // 1. Freeze the memtable and start a fresh log. Writes that arrive after
-  //    this point go to the new memtable and the new log.
+  // 1. Freeze the memtable and start a fresh log.
   imm_ = std::move(mem_);
   mem_ = std::make_unique<MemTable>(internal_comparator_);
 
@@ -364,7 +450,9 @@ Status DBImpl::FlushMemTableLocked() {
   const uint64_t table_number = next_file_number_++;
   uint64_t file_size = 0;
   uint64_t num_entries = 0;
-  s = BuildTable(dbname_, options_, imm_.get(), table_number, &file_size, &num_entries);
+  std::string smallest, largest;
+  s = BuildTable(dbname_, options_, imm_.get(), table_number, &file_size,
+                 &num_entries, &smallest, &largest);
   if (!s.ok()) return s;
 
   if (num_entries > 0) {
@@ -374,6 +462,9 @@ Status DBImpl::FlushMemTableLocked() {
 
     FileEntry entry;
     entry.number = table_number;
+    entry.file_size = file_size;
+    entry.smallest = std::move(smallest);
+    entry.largest = std::move(largest);
     entry.table = std::move(table);
     files_.insert(files_.begin(), std::move(entry));  // newest first
   }
@@ -394,21 +485,27 @@ Status DBImpl::FlushMemTableLocked() {
   return Status::OK();
 }
 
-// A minimal stand-in for a real MANIFEST. Day 4 replaces it with an append-only
-// edit log (VersionEdit) so that adding one file does not rewrite the whole
-// state, and so that concurrent readers can pin a version.
+// A minimal stand-in for a real MANIFEST. Day 4 replaces it with an
+// append-only edit log (VersionEdit) so that adding one file does not rewrite
+// the whole state, and so concurrent readers can pin a version.
 Status DBImpl::WriteDescriptorLocked() {
   std::string body;
+  PutFixed32BE(&body, kDescriptorVersion);
   PutFixed64BE(&body, last_sequence_);
   PutFixed64BE(&body, log_number_);
   PutFixed64BE(&body, next_file_number_);
   PutFixed32BE(&body, static_cast<uint32_t>(files_.size()));
-  for (const auto& f : files_) PutFixed64BE(&body, f.number);
+  for (const auto& f : files_) {
+    PutFixed64BE(&body, f.number);
+    PutFixed64BE(&body, f.file_size);
+    PutLengthPrefixedSlice(&body, Slice(f.smallest));
+    PutLengthPrefixedSlice(&body, Slice(f.largest));
+  }
   PutFixed32BE(&body, crc32c::Mask(crc32c::Value(body.data(), body.size())));
 
   // Write to a temp file, fsync, then rename. Rename is atomic on both POSIX
   // and Win32, so a reader sees either the whole old descriptor or the whole
-  // new one - never a half-written mixture.
+  // new one, never a half-written mixture.
   const std::string tmp = TempDescriptorFileName(dbname_);
   std::unique_ptr<WritableFile> file;
   Status s = WritableFile::Open(tmp, /*append=*/false, &file);
@@ -434,7 +531,7 @@ Status DBImpl::ReadDescriptor(bool* found) {
   uint64_t size = 0;
   Status s = GetFileSize(path, &size);
   if (!s.ok()) return s;
-  if (size < 28) return Status::Corruption("descriptor too short");
+  if (size < 32) return Status::Corruption("descriptor too short");
 
   std::unique_ptr<SequentialFile> file;
   s = SequentialFile::Open(path, &file);
@@ -452,24 +549,38 @@ Status DBImpl::ReadDescriptor(bool* found) {
     return Status::Corruption("descriptor checksum mismatch");
   }
 
-  const char* p = contents.data();
-  last_sequence_ = DecodeFixed64BE(p);
-  log_number_ = DecodeFixed64BE(p + 8);
-  next_file_number_ = DecodeFixed64BE(p + 16);
-  const uint32_t num_files = DecodeFixed32BE(p + 24);
-
-  if (28 + static_cast<size_t>(num_files) * 8 != body_len) {
-    return Status::Corruption("descriptor file count mismatch");
+  Slice input(contents.data(), body_len);
+  if (input.size() < 4) return Status::Corruption("descriptor truncated");
+  const uint32_t version = DecodeFixed32BE(input.data());
+  if (version != kDescriptorVersion) {
+    return Status::Corruption("unsupported descriptor version");
   }
+  input.remove_prefix(4);
+
+  if (input.size() < 28) return Status::Corruption("descriptor truncated");
+  last_sequence_ = DecodeFixed64BE(input.data());
+  log_number_ = DecodeFixed64BE(input.data() + 8);
+  next_file_number_ = DecodeFixed64BE(input.data() + 16);
+  const uint32_t num_files = DecodeFixed32BE(input.data() + 24);
+  input.remove_prefix(28);
 
   for (uint32_t i = 0; i < num_files; ++i) {
-    const uint64_t number = DecodeFixed64BE(p + 28 + i * 8);
-    std::unique_ptr<Table> table;
-    s = OpenTable(number, &table);
-    if (!s.ok()) return s;
+    if (input.size() < 16) return Status::Corruption("descriptor truncated");
     FileEntry entry;
-    entry.number = number;
-    entry.table = std::move(table);
+    entry.number = DecodeFixed64BE(input.data());
+    entry.file_size = DecodeFixed64BE(input.data() + 8);
+    input.remove_prefix(16);
+
+    Slice smallest, largest;
+    if (!GetLengthPrefixedSlice(&input, &smallest) ||
+        !GetLengthPrefixedSlice(&input, &largest)) {
+      return Status::Corruption("descriptor key range truncated");
+    }
+    entry.smallest = smallest.ToString();
+    entry.largest = largest.ToString();
+
+    s = OpenTable(entry.number, &entry.table);
+    if (!s.ok()) return s;
     files_.push_back(std::move(entry));  // already stored newest first
   }
 
@@ -500,7 +611,7 @@ Status DBImpl::Recover() {
   if (!s.ok()) return s;
 
   if (!have_descriptor) {
-    // No descriptor. Either a brand-new database, or one created before any
+    // No descriptor: either a brand-new database, or one created before any
     // flush happened, in which case log 1 holds everything.
     if (options_.error_if_exists && FileExists(LogFileName(dbname_, 1))) {
       return Status::InvalidArgument(dbname_, "database already exists");
@@ -509,8 +620,8 @@ Status DBImpl::Recover() {
     next_file_number_ = 2;
   }
 
-  // Replay the current log. Anything older was already folded into an SSTable
-  // before the descriptor that named it was committed.
+  // Replay the current log. Anything older was folded into an SSTable before
+  // the descriptor that named it was committed.
   const std::string wal_path = LogFileName(dbname_, log_number_);
   if (FileExists(wal_path)) {
     std::unique_ptr<SequentialFile> file;

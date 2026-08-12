@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdio>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -246,6 +247,91 @@ TEST_F(FlushTest, ReadsAreServedFromDiskAfterFlush) {
   const Stats s = db_->GetStats();
   EXPECT_GT(s.sstable_hits, 0u) << "some reads should be answered from sstables";
   EXPECT_GT(s.sstables_probed, 0u);
+}
+
+// --- day 3: the read-path filters ------------------------------------------
+//
+// Two independent mechanisms skip work, and which one fires depends entirely
+// on the WRITE order. Both are tested, because the benchmark only exercises
+// the first and a passing benchmark is not evidence the second works.
+
+// Sequentially-written keys give each L0 file a disjoint key range, so the
+// range check alone eliminates almost every file - with no I/O and without the
+// bloom filter ever being consulted.
+TEST_F(FlushTest, SequentialWritesArePrunedByKeyRange) {
+  for (int i = 0; i < 4000; ++i) {
+    ASSERT_TRUE(Put(Key(i), std::string(80, 'v')).ok());
+  }
+  ASSERT_GT(db_->GetStats().num_sstables, 3u);
+
+  const uint64_t probed_before = db_->GetStats().sstables_probed;
+  for (int i = 0; i < 500; ++i) Get(Key(i));
+  const Stats s = db_->GetStats();
+
+  EXPECT_GT(s.range_rejections, 0u) << "disjoint ranges must be pruned";
+
+  const double probes_per_read =
+      static_cast<double>(s.sstables_probed - probed_before) / 500.0;
+  EXPECT_LT(probes_per_read, 3.0)
+      << "range pruning should leave barely more than one candidate file";
+}
+
+// Randomly-ordered writes make every L0 file span nearly the whole key space,
+// so range pruning is useless and the bloom filter becomes the only defence.
+// This is the realistic case for this project: entity, link and provenance
+// keys are interleaved by ULID, not written in sorted order.
+TEST_F(FlushTest, OverlappingRangesArePrunedByBloomFilter) {
+  std::mt19937 rnd(20260809);
+  for (int i = 0; i < 6000; ++i) {
+    const int k = static_cast<int>(rnd() % 100000);
+    ASSERT_TRUE(Put(Key(k), std::string(80, 'v')).ok());
+  }
+  ASSERT_GT(db_->GetStats().num_sstables, 3u);
+
+  // Probe keys that were never written but fall inside every file's range.
+  for (int i = 0; i < 2000; ++i) {
+    const int k = static_cast<int>(rnd() % 100000);
+    Get(Key(k));
+  }
+
+  const Stats s = db_->GetStats();
+  EXPECT_GT(s.filter_rejections, 0u)
+      << "with overlapping ranges the bloom filter must be doing the work";
+}
+
+TEST_F(FlushTest, BloomFilterNeverCausesAFalseNegative) {
+  // The one failure mode a filter must never have: claiming a key is absent
+  // when it is present. That would silently lose data rather than merely cost
+  // a wasted read.
+  std::mt19937 rnd(4242);
+  std::vector<int> written;
+  for (int i = 0; i < 5000; ++i) {
+    const int k = static_cast<int>(rnd() % 50000);
+    ASSERT_TRUE(Put(Key(k), "v" + std::to_string(k)).ok());
+    written.push_back(k);
+  }
+  ASSERT_GT(db_->GetStats().num_sstables, 2u);
+
+  for (int k : written) {
+    EXPECT_EQ("v" + std::to_string(k), Get(Key(k)))
+        << "key " << k << " was written but reported absent";
+  }
+}
+
+TEST_F(FlushTest, BlockCacheServesRepeatedReads) {
+  for (int i = 0; i < 4000; ++i) {
+    ASSERT_TRUE(Put(Key(i), std::string(80, 'v')).ok());
+  }
+
+  // First pass populates the cache, second pass should mostly hit it.
+  for (int i = 0; i < 200; ++i) Get(Key(i));
+  const uint64_t hits_after_first = db_->GetStats().cache_hits;
+  for (int i = 0; i < 200; ++i) Get(Key(i));
+
+  const Stats s = db_->GetStats();
+  EXPECT_GT(s.cache_hits, hits_after_first)
+      << "re-reading the same keys must hit the block cache";
+  EXPECT_GT(s.cache_bytes, 0u);
 }
 
 TEST_F(FlushTest, LargeValuesSurviveFlush) {

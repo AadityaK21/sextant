@@ -20,6 +20,7 @@
 #include "arena.h"
 #include "internal_key.h"
 #include "skiplist.h"
+#include "sextant/lsm/iterator.h"
 #include "sextant/lsm/status.h"
 
 namespace sextant::lsm {
@@ -75,6 +76,11 @@ class MemTable {
     Table::Iterator iter_;
     std::string tmp_;     // scratch for Seek's length-prefixed target
   };
+
+  // Heap-allocated adapter implementing the shared Iterator interface, so a
+  // memtable can be fed to NewMergingIterator alongside SSTable iterators.
+  // Caller owns the result; the memtable must outlive it.
+  lsm::Iterator* NewIterator() const;
 
  private:
   KeyComparator key_comparator_;

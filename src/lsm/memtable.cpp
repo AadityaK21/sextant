@@ -85,6 +85,34 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) const {
   return false;
 }
 
+namespace {
+
+// Thin bridge from MemTable::Iterator (a concrete walker) to the polymorphic
+// Iterator the merge path consumes.
+class MemTableIteratorAdapter final : public lsm::Iterator {
+ public:
+  explicit MemTableIteratorAdapter(const MemTable* mem) : iter_(mem) {}
+
+  bool Valid() const override { return iter_.Valid(); }
+  void SeekToFirst() override { iter_.SeekToFirst(); }
+  void SeekToLast() override { iter_.SeekToLast(); }
+  void Seek(const Slice& target) override { iter_.Seek(target); }
+  void Next() override { iter_.Next(); }
+  void Prev() override { iter_.Prev(); }
+  Slice key() const override { return iter_.key(); }
+  Slice value() const override { return iter_.value(); }
+  Status status() const override { return Status::OK(); }
+
+ private:
+  MemTable::Iterator iter_;
+};
+
+}  // namespace
+
+lsm::Iterator* MemTable::NewIterator() const {
+  return new MemTableIteratorAdapter(this);
+}
+
 void MemTable::Iterator::Seek(const Slice& internal_key) {
   tmp_.clear();
   PutLengthPrefixedSlice(&tmp_, internal_key);

@@ -21,7 +21,7 @@ C++20 · React · no storage dependencies
 |---|---|---|
 | **Day 1** - memtable, WAL, recovery, snapshots | ✅ | 67 tests green |
 | **Day 2** - SSTable build/read, flush to L0 | ✅ | 98 tests green |
-| Day 3 - bloom filters, block cache, merging iterator | ⬜ | |
+| **Day 3** - bloom filters, block cache, merging iterator | ✅ | 132 tests green |
 | Day 4 - VersionSet/MANIFEST, leveled compaction | ⬜ | |
 | Day 5 - keyspace codec | ⬜ | |
 | Days 6-7 - ontology, transforms, three connectors | ⬜ | |
@@ -109,11 +109,13 @@ Filled in as milestones land. Every number here is reproducible with a command.
 
 | | |
 |---|---|
-| Storage engine | 855k batched writes/sec · recovery bounded by buffer size, not data size · [full benchmarks](docs/BENCH.md) |
-| Correctness | 98 tests green on Linux, Windows and macOS · clean under ASan + UBSan · lock-free skiplist clean under ThreadSanitizer |
+| Storage engine | 812k batched writes/sec · 146k random reads/sec at p99 **17 µs** · 4.6M misses/sec · [full benchmarks](docs/BENCH.md) |
+| | Recovery bounded by buffer size, not data size: 2,013 records replayed instead of 202,200 |
+| Correctness | 132 tests green on Linux, Windows and macOS · clean under ASan + UBSan · lock-free skiplist clean under ThreadSanitizer |
 | | Differential test: 60k random ops vs `std::map`, forced across ~40 flushes and many SSTables |
 | | Torn-WAL recovery: every acknowledged write survives a truncated log tail |
 | | Block and SSTable CRCs reject single-bit corruption |
+| | Bloom filter proven to have zero false negatives over 10k keys |
 | Entity resolution | *day 10* - F1 on a held-out labeled set |
 | Blocking | *day 8* - reduction ratio, pair completeness |
 | Lineage | *day 11* - round-trip verified for 100% of resolved properties |

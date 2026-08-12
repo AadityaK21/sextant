@@ -16,6 +16,7 @@
 #include <memory>
 #include <string>
 
+#include "sextant/lsm/iterator.h"
 #include "sextant/lsm/options.h"
 #include "sextant/lsm/slice.h"
 #include "sextant/lsm/status.h"
@@ -45,6 +46,15 @@ struct Stats {
   uint64_t num_sstables = 0;
   uint64_t sstable_hits = 0;     // reads satisfied from disk
   uint64_t sstables_probed = 0;  // tables consulted across all reads
+
+  // Day 3. These three are the whole story of the read-path optimisation:
+  // every rejection is a data block that was never read off disk.
+  uint64_t range_rejections = 0;   // file skipped: key outside its [smallest,largest]
+  uint64_t filter_rejections = 0;  // block skipped: bloom filter said "definitely not"
+  uint64_t cache_hits = 0;
+  uint64_t cache_misses = 0;
+  uint64_t cache_evictions = 0;
+  uint64_t cache_bytes = 0;
 };
 
 class DB {
@@ -66,6 +76,18 @@ class DB {
 
   // Returns Status::NotFound if the key is absent or tombstoned.
   virtual Status Get(const ReadOptions& opts, const Slice& key, std::string* value) = 0;
+
+  // Ordered scan over live user keys, merging the memtable, the immutable
+  // memtable and every SSTable. Tombstoned and shadowed versions are hidden.
+  //
+  // FORWARD ONLY for now: SeekToFirst, Seek and Next. Reverse iteration is not
+  // implemented because nothing in this project needs it - compaction streams
+  // forward, and the graph traversals in src/query are forward range scans.
+  // Calling Prev() returns a NotSupported status rather than pretending.
+  //
+  // This is the primitive the whole system above the engine is built on: a
+  // LINKOUT prefix scan and a TIDX time-range scan are both just Seek + Next.
+  virtual std::unique_ptr<Iterator> NewIterator(const ReadOptions& options) = 0;
 
   virtual const Snapshot* GetSnapshot() = 0;
   virtual void ReleaseSnapshot(const Snapshot* snapshot) = 0;
