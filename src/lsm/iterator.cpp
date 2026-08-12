@@ -1,5 +1,7 @@
 #include "sextant/lsm/iterator.h"
 
+#include <cassert>
+
 namespace sextant::lsm {
 
 Iterator::Iterator() { cleanup_head_.function = nullptr; }

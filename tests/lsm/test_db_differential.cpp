@@ -17,6 +17,7 @@
 
 #include <cstdio>
 #include <map>
+#include <memory>
 #include <optional>
 #include <random>
 #include <string>

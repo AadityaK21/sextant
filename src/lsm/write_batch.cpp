@@ -4,6 +4,9 @@
 #include "internal_key.h"
 #include "memtable.h"
 
+#include <cassert>
+#include <cstdint>
+
 namespace sextant::lsm {
 
 WriteBatch::WriteBatch() { Clear(); }

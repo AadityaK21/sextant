@@ -1,6 +1,8 @@
 #include "block_builder.h"
 
+#include <algorithm>
 #include <cassert>
+#include <cstdint>
 #include <cstring>
 
 #include "coding.h"

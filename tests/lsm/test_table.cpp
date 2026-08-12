@@ -2,11 +2,14 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <cstdio>
 #include <map>
 #include <memory>
 #include <random>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "env.h"
 #include "internal_key.h"

@@ -1,6 +1,10 @@
 #include "table.h"
 
 #include <cassert>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
 
 #include "cache.h"
 #include "coding.h"

@@ -4,6 +4,11 @@
 #include "env.h"
 #include "filename.h"
 
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
+
 namespace sextant::lsm {
 namespace {
 

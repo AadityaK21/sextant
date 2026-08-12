@@ -3,6 +3,11 @@
 #include "coding.h"
 #include "crc32c.h"
 
+#include <cassert>
+#include <cstdint>
+#include <memory>
+#include <string>
+
 namespace sextant::lsm {
 
 void BlockHandle::EncodeTo(std::string* dst) const {

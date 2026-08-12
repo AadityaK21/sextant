@@ -2,9 +2,12 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdio>
 #include <map>
+#include <memory>
 #include <random>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "block_builder.h"

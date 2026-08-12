@@ -2,6 +2,11 @@
 
 #include "coding.h"
 
+#include <cassert>
+#include <cstdint>
+#include <cstring>
+#include <string>
+
 namespace sextant::lsm {
 namespace {
 

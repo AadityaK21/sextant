@@ -1,6 +1,9 @@
 #include "merger.h"
 
 #include <cassert>
+#include <memory>
+#include <utility>
+#include <vector>
 
 namespace sextant::lsm {
 namespace {

@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
+#include <cstdio>
 #include <string>
 #include <vector>
 

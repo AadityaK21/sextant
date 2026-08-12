@@ -1,6 +1,7 @@
 #include "db_iter.h"
 
 #include <cassert>
+#include <memory>
 #include <string>
 
 namespace sextant::lsm {

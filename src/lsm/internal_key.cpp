@@ -1,6 +1,9 @@
 #include "internal_key.h"
 
+#include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <string>
 
 namespace sextant::lsm {
 

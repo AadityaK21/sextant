@@ -1,6 +1,7 @@
 #include "crc32c.h"
 
 #include <array>
+#include <cstdint>
 
 namespace sextant::lsm::crc32c {
 namespace {

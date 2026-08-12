@@ -1,5 +1,8 @@
 #include "coding.h"
 
+#include <cstdint>
+#include <string>
+
 namespace sextant::lsm {
 
 char* EncodeVarint32(char* dst, uint32_t v) {

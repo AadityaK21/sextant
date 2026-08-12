@@ -1,7 +1,15 @@
 #include "version_set.h"
 
 #include <algorithm>
+#include <cassert>
+#include <cstdint>
 #include <cstdio>
+#include <memory>
+#include <mutex>
+#include <set>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "coding.h"
 #include "filename.h"

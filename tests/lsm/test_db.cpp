@@ -2,7 +2,9 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <vector>
 

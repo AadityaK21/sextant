@@ -21,10 +21,18 @@
 //    stops them at 12. Backpressure is a feature: the alternative is unbounded
 //    read amplification and eventually running out of disk.
 
+#include <algorithm>
 #include <atomic>
+#include <cassert>
+#include <chrono>
 #include <condition_variable>
+#include <cstdint>
+#include <memory>
+#include <mutex>
 #include <set>
+#include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "bloom.h"

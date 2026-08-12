@@ -1,6 +1,8 @@
 #include "version_edit.h"
 
+#include <cstdint>
 #include <cstdio>
+#include <string>
 
 #include "coding.h"
 

@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace sextant::lsm;

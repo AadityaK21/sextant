@@ -1,6 +1,9 @@
 #include "sextant/lsm/status.h"
 
+#include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <string>
 
 namespace sextant::lsm {
 

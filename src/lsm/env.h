@@ -13,9 +13,11 @@
 
 #pragma once
 
+#include <cstdint>
 #include <cstdio>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "sextant/lsm/slice.h"
@@ -92,9 +94,18 @@ class RandomAccessFile {
   const std::string& filename() const { return filename_; }
 
  private:
+#if defined(_WIN32)
+  // A void* rather than an int fd, because Windows needs CreateFile to pass
+  // FILE_SHARE_DELETE. See the note in env.cpp: without it, compaction cannot
+  // unlink a file that any reader still has open, and obsolete SSTables
+  // accumulate forever.
+  RandomAccessFile(void* handle, std::string fname)
+      : handle_(handle), filename_(std::move(fname)) {}
+  void* handle_;
+#else
   RandomAccessFile(int fd, std::string fname) : fd_(fd), filename_(std::move(fname)) {}
-
   int fd_;
+#endif
   std::string filename_;
 };
 

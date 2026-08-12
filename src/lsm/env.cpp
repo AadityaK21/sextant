@@ -1,8 +1,17 @@
 #include "env.h"
 
 #include <cerrno>
+#include <cstdint>
+#include <cstdio>
 #include <cstring>
+#include <memory>
+#include <string>
+#include <vector>
 
+// Platform headers. These must stay inside the conditional and must NOT be
+// sorted into the block above - a tidy-up pass that reorders them across the
+// #if/#else boundary produces "#else without #if", which is how this file got
+// broken once already.
 #if defined(_WIN32)
 // NOMINMAX: <windows.h> defines min/max as macros, which breaks std::min and
 // std::max in any translation unit that sees it. WIN32_LEAN_AND_MEAN drops the
@@ -111,41 +120,66 @@ Status SequentialFile::Skip(uint64_t n) {
 Status RandomAccessFile::Open(const std::string& fname,
                               std::unique_ptr<RandomAccessFile>* result) {
 #if defined(_WIN32)
-  const int fd = _open(fname.c_str(), _O_RDONLY | _O_BINARY);
+  // FILE_SHARE_DELETE is the important flag here and it has no equivalent in
+  // the CRT's _open.
+  //
+  // POSIX lets you unlink a file while readers still have it open; the data
+  // stays alive until the last descriptor closes. Windows does NOT, unless
+  // every opener passed FILE_SHARE_DELETE. Without it, compaction's attempt to
+  // remove an input file fails with a sharing violation whenever any reader
+  // still holds it, obsolete SSTables pile up, and disk usage grows without
+  // bound - on Windows only, while Linux and macOS CI stay green.
+  //
+  // FILE_FLAG_RANDOM_ACCESS tells the cache manager not to read ahead, which
+  // is right for index-driven block reads.
+  HANDLE handle = CreateFileA(
+      fname.c_str(), GENERIC_READ,
+      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS, nullptr);
+  if (handle == INVALID_HANDLE_VALUE) {
+    return Status::IOError(fname, "CreateFile failed");
+  }
+  result->reset(new RandomAccessFile(handle, fname));
+  return Status::OK();
 #else
   const int fd = ::open(fname.c_str(), O_RDONLY);
-#endif
   if (fd < 0) return PosixError(fname, errno);
   result->reset(new RandomAccessFile(fd, fname));
   return Status::OK();
+#endif
 }
 
 RandomAccessFile::~RandomAccessFile() {
-  if (fd_ >= 0) {
 #if defined(_WIN32)
-    _close(fd_);
-#else
-    ::close(fd_);
-#endif
+  if (handle_ != nullptr && handle_ != INVALID_HANDLE_VALUE) {
+    CloseHandle(static_cast<HANDLE>(handle_));
   }
+#else
+  if (fd_ >= 0) ::close(fd_);
+#endif
 }
 
 Status RandomAccessFile::Read(uint64_t offset, size_t n, Slice* result,
                               char* scratch) const {
-  // pread / _lseeki64+_read on a private fd: no shared file position is
-  // mutated, so concurrent readers do not interfere. Using fseek+fread here
-  // would be a data race waiting to happen.
+  // Positional reads that do not touch any shared file offset, so concurrent
+  // readers cannot interfere. pread on POSIX; an OVERLAPPED ReadFile on
+  // Windows. Using seek-then-read would be a data race waiting to happen.
 #if defined(_WIN32)
-  if (_lseeki64(fd_, static_cast<__int64>(offset), SEEK_SET) < 0) {
-    *result = Slice(scratch, 0);
-    return PosixError(filename_, errno);
+  DWORD bytes_read = 0;
+  OVERLAPPED overlapped = {};
+  overlapped.Offset = static_cast<DWORD>(offset & 0xFFFFFFFFu);
+  overlapped.OffsetHigh = static_cast<DWORD>(offset >> 32);
+
+  if (!ReadFile(static_cast<HANDLE>(handle_), scratch, static_cast<DWORD>(n),
+                &bytes_read, &overlapped)) {
+    // Reading right up to end-of-file reports ERROR_HANDLE_EOF rather than a
+    // short read; that is not an error for us.
+    if (GetLastError() != ERROR_HANDLE_EOF) {
+      *result = Slice(scratch, 0);
+      return Status::IOError(filename_, "ReadFile failed");
+    }
   }
-  const int r = _read(fd_, scratch, static_cast<unsigned int>(n));
-  if (r < 0) {
-    *result = Slice(scratch, 0);
-    return PosixError(filename_, errno);
-  }
-  *result = Slice(scratch, static_cast<size_t>(r));
+  *result = Slice(scratch, static_cast<size_t>(bytes_read));
   return Status::OK();
 #else
   ssize_t total = 0;

@@ -1,6 +1,9 @@
 #include "wal.h"
 
+#include <cassert>
+#include <cstdint>
 #include <cstring>
+#include <string>
 
 #include "coding.h"
 #include "crc32c.h"

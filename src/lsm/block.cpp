@@ -1,6 +1,8 @@
 #include "block.h"
 
 #include <algorithm>
+#include <cassert>
+#include <cstdint>
 #include <cstring>
 #include <string>
 

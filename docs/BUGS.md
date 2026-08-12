@@ -57,6 +57,45 @@ before the Windows CI job finds it for you.
 
 ---
 
+## 111 missing includes, invisible until CI ran          2026-08-09
+
+**Symptom.** Four of five CI jobs failed. macOS passed. ubuntu-latest, ASan and
+TSan all died in 19-26 seconds - too fast to be tests, so a build failure.
+Locally: 145/145 green.
+
+**Root cause.** libstdc++ used to pull in a great many headers transitively.
+**GCC 13 removed most of that.** My sandbox runs GCC 11.4 (Ubuntu 22.04) and
+CI's ubuntu-latest is 24.04 with GCC 13+, so code like
+
+```cpp
+#include <vector>
+// ...
+std::sort(logs.begin(), logs.end());   // <algorithm> never included
+std::set<uint64_t> live;               // <set> never included
+```
+
+compiled fine for me and for Clang on macOS, and failed everywhere else. An
+audit found **111** such omissions across the tree.
+
+**Fix.** Added every missing include, and wrote `scripts/check_includes.py` -
+a heuristic that maps well-known `std::` symbols to their canonical headers and
+fails if one is used without being included. It runs as the first CI job because
+it needs no compiler and finishes in seconds.
+
+**Second bug, self-inflicted.** The script that inserted the includes sorted
+each file's include block alphabetically. `env.cpp` has a `#if defined(_WIN32)
+/ #else / #endif` block of platform headers, and sorting reordered the
+directives themselves, producing `#else without #if`. The fixer now refuses to
+touch that file and says so.
+
+**Lesson.** The compiler you develop on is not the compiler your CI runs, and
+"it builds" is a statement about one toolchain, not about the code. This is the
+strongest possible argument for the three-OS matrix - and for putting the
+cheapest, fastest check first, so a two-second script catches what would
+otherwise be a two-minute build failure on four machines.
+
+---
+
 ## Shutdown mid-compaction resurrected deleted data          2026-08-09
 
 **Symptom.** `DifferentialTest.StateSurvivesRepeatedReopen` failed under ASan

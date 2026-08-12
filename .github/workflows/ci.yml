@@ -6,6 +6,16 @@ on:
   pull_request:
 
 jobs:
+  # Cheap and fast, so it runs first: catches the "compiles on my GCC 11, fails
+  # on CI's GCC 13" class of failure without needing a compiler at all.
+  # See docs/BUGS.md - this cost a full red CI run once.
+  includes:
+    name: Include hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/check_includes.py
+
   build-and-test:
     name: ${{ matrix.os }} / ${{ matrix.build_type }}
     runs-on: ${{ matrix.os }}

@@ -1,6 +1,8 @@
 #include "filename.h"
 
+#include <cstdint>
 #include <cstdio>
+#include <string>
 
 namespace sextant::lsm {
 namespace {

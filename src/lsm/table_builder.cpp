@@ -1,6 +1,9 @@
 #include "table_builder.h"
 
 #include <cassert>
+#include <cstdint>
+#include <memory>
+#include <string>
 
 #include "coding.h"
 #include "crc32c.h"

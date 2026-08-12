@@ -7,7 +7,9 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <random>
 #include <string>
 #include <vector>

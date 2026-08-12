@@ -2,6 +2,9 @@
 
 #include "coding.h"
 
+#include <cassert>
+#include <cstdint>
+
 namespace sextant::lsm {
 
 FilterBlockBuilder::FilterBlockBuilder(const BloomFilterPolicy* policy)

@@ -1,5 +1,8 @@
 #include "arena.h"
 
+#include <cassert>
+#include <cstdint>
+
 namespace sextant::lsm {
 
 Arena::~Arena() {
