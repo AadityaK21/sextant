@@ -1,0 +1,74 @@
+{
+  "portCalls": [
+    {
+      "portCallId": 3120001,
+      "portToVisit": "FIHEL",
+      "prevPort": "DEHAM",
+      "mmsi": 230123456,
+      "portAreaDetails": [
+        { "ata": "2026-04-03T07:15:00+03:00", "atd": "2026-04-03T19:40:00+03:00" }
+      ]
+    },
+    {
+      "portCallId": 3120002,
+      "portToVisit": "FIKTK",
+      "prevPort": "NLRTM",
+      "mmsi": 244567890,
+      "portAreaDetails": [
+        { "ata": "2026-04-11T05:02:00+03:00", "atd": "2026-04-12T02:30:00+03:00" }
+      ]
+    },
+    {
+      "portCallId": 3120003,
+      "portToVisit": "FIHEL",
+      "prevPort": "SEGOT",
+      "mmsi": 265432100,
+      "portAreaDetails": [
+        { "ata": "2026-05-20T11:00:00+03:00", "atd": "2026-05-20T22:15:00+03:00" }
+      ]
+    },
+    {
+      "portCallId": 3120004,
+      "portToVisit": "FITKU",
+      "prevPort": "DEHAM",
+      "mmsi": 211345678,
+      "portAreaDetails": [
+        { "ata": "2026-06-02T14:25:00+03:00", "atd": "2026-06-03T08:00:00+03:00" }
+      ]
+    },
+    {
+      "portCallId": 3120005,
+      "portToVisit": "FIHEL",
+      "prevPort": "BEANR",
+      "mmsi": 636012345,
+      "portAreaDetails": [
+        { "ata": "2026-06-28T03:40:00+03:00", "atd": "2026-06-29T17:05:00+03:00" }
+      ]
+    },
+    {
+      "portCallId": 3120006,
+      "portToVisit": "FIRAU",
+      "prevPort": "FIHEL",
+      "mmsi": 230987654,
+      "portAreaDetails": [
+        { "ata": "2026-07-09T09:10:00+03:00", "atd": "2026-07-09T21:55:00+03:00" }
+      ]
+    },
+    {
+      "portCallId": 3120007,
+      "portToVisit": "FIHEL",
+      "prevPort": "FIKTK",
+      "mmsi": 230123456,
+      "portAreaDetails": []
+    },
+    {
+      "portCallId": 3120008,
+      "portToVisit": "FIPOR",
+      "prevPort": "SEGOT",
+      "mmsi": 265432100,
+      "portAreaDetails": [
+        { "ata": "not a timestamp", "atd": null }
+      ]
+    }
+  ]
+}

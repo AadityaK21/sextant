@@ -414,6 +414,32 @@ std::string CandidatePrefix() {
   return k;
 }
 
+// --- INGEST -----------------------------------------------------------------
+
+std::string EncodeIngestKey(SourceId source, BatchId batch) {
+  std::string k;
+  k.reserve(1 + 4 + 8);
+  PutPrefix(&k, Keyspace::kIngest);
+  PutU32(&k, source);
+  PutU64(&k, batch);
+  return k;
+}
+
+bool DecodeIngestKey(const Slice& key, SourceId* source, BatchId* batch) {
+  if (!CheckPrefix(key, Keyspace::kIngest, 1 + 4 + 8)) return false;
+  *source = GetU32(key.data() + 1);
+  *batch = GetU64(key.data() + 5);
+  return true;
+}
+
+std::string IngestPrefix(SourceId source) {
+  std::string k;
+  k.reserve(1 + 4);
+  PutPrefix(&k, Keyspace::kIngest);
+  PutU32(&k, source);
+  return k;
+}
+
 // --- helpers ----------------------------------------------------------------
 
 std::string PrefixUpperBound(const std::string& prefix) {
@@ -450,6 +476,7 @@ const char* KeyspaceName(Keyspace ks) {
     case Keyspace::kIndex: return "IDX";
     case Keyspace::kTimeIndex: return "TIDX";
     case Keyspace::kCandidate: return "CAND";
+    case Keyspace::kIngest: return "INGEST";
   }
   return "UNKNOWN";
 }

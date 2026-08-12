@@ -34,6 +34,6 @@ target_include_directories(sextant_lsm
 target_compile_features(sextant_lsm PUBLIC cxx_std_20)
 
 find_package(Threads REQUIRED)
-target_link_libraries(sextant_lsm PUBLIC Threads::Threads)
+target_link_libraries(sextant_lsm PUBLIC Threads::Threads PRIVATE sextant_warnings)
 
 add_library(sextant::lsm ALIAS sextant_lsm)

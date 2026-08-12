@@ -18,6 +18,7 @@
 
 source:
   id: marinecadastre
+  source_id: 4
   name: MarineCadastre.gov AIS (via Postgres)
   connector: postgres
   dsn: "postgresql://sextant:sextant@localhost:5433/maritime"
@@ -27,8 +28,25 @@ source:
     FROM ais_broadcast
     WHERE base_datetime >= $1 AND base_datetime < $2
     ORDER BY mmsi, base_datetime
+  # Bound, not interpolated. This file is meant to be edited, and a query
+  # assembled by string concatenation from an editable file is an injection
+  # hole even when the only person editing it is you.
+  params: ["2026-01-01", "2026-04-01"]
   cursor_size: 10000          # stream; never load a table into RAM
-  natural_key: ["mmsi", "base_datetime"]
+  # The natural key is the MMSI alone, NOT (mmsi, base_datetime).
+  #
+  # A Vessel in the ontology is a hull. An AIS row is one broadcast from that
+  # hull, and this table holds hundreds of them per vessel per day. Keying the
+  # normalised record by (mmsi, timestamp) would create one SourceRecord per
+  # ping - millions of near-identical records to block, compare and cluster,
+  # all describing the same ship.
+  #
+  # Keying on mmsi alone means each new ping overwrites the previous normalised
+  # view of that hull, and because the query is ordered by base_datetime the
+  # surviving record is the most recent one - which is exactly what the
+  # `most_recent` fusion rule on name and flag expects. Every individual ping is
+  # still in RAW with its own row, so nothing is lost to lineage.
+  natural_key: ["mmsi"]
   trust: 0.60
 
 mappings:
@@ -38,5 +56,12 @@ mappings:
       imo:       { from: "imo",         transform: [trim, strip_imo_prefix, validate_imo] }
       mmsi:      { from: "mmsi",        transform: [to_string] }
       call_sign: { from: "call_sign",   transform: [trim, upper, null_if_blank] }
-      ship_type: { from: "vessel_type", transform: [to_int, uscg_to_ais_type] }
+      # `normalize_ship_type` keeps ITU-R M.1371 codes 0-99 and drops anything
+      # else with a reason. An earlier draft of this file called for a
+      # uscg_to_ais_type transform that would translate between the two vessel
+      # taxonomies; that mapping was not written, because inventing one would
+      # have put fabricated categories into the ontology and lineage would then
+      # have faithfully recorded where the fabrication happened. A null with a
+      # reason is worth more than a plausible guess.
+      ship_type: { from: "vessel_type", transform: [to_int, normalize_ship_type] }
       flag:      { from: "mmsi",        transform: [to_string, mid_to_country] }

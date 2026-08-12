@@ -7,10 +7,19 @@ cmake-build-*/
 .cache/
 compile_commands.json
 
-# data - fetched, not committed (except small samples under data/snapshots/sample/)
+# Data. The full datasets are fetched, never committed - UN/LOCODE alone is
+# about 110,000 rows. The small excerpts under data/snapshots ARE committed, so
+# that the test suite and `sextant ingest` run on a clean machine with no
+# network, and they are listed explicitly rather than by a wildcard: an ignore
+# rule that silently swallows a file the tests depend on is a very confusing
+# afternoon.
 data/raw/
 data/snapshots/*
-!data/snapshots/sample/
+!data/snapshots/README.md
+!data/snapshots/wpi/
+!data/snapshots/unlocode/
+!data/snapshots/digitraffic/
+data/snapshots/digitraffic/archive/
 *.zip
 *.gz
 *.zst
@@ -22,6 +31,9 @@ MANIFEST-*
 CURRENT
 LOCK
 testdb/
+sextant-db/
+ingesttest_*/
+storetest_*/
 /tmp_*
 
 # node

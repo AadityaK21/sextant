@@ -86,6 +86,26 @@ Status EntityWriter::Commit(const lsm::WriteOptions& options) {
   return store_->db_->Write(options, &batch_);
 }
 
+// --- RowWriter --------------------------------------------------------------
+
+RowWriter::RowWriter(Store* store, SourceId source, BatchId batch, RowSeq row)
+    : store_(store), source_(source), batch_id_(batch), row_(row) {}
+
+RowWriter& RowWriter::SetRaw(const Slice& bytes) {
+  batch_.Put(Slice(EncodeRawKey(source_, batch_id_, row_)), bytes);
+  return *this;
+}
+
+RowWriter& RowWriter::AddSourceRecord(uint64_t natural_key_hash,
+                                      const Slice& bytes) {
+  batch_.Put(Slice(EncodeSourceRecordKey(source_, natural_key_hash)), bytes);
+  return *this;
+}
+
+Status RowWriter::Commit(const lsm::WriteOptions& options) {
+  return store_->db_->Write(options, &batch_);
+}
+
 // --- Store ------------------------------------------------------------------
 
 Status Store::Open(const lsm::Options& options, const std::string& path,
@@ -129,6 +149,40 @@ Status Store::PutRawRecord(SourceId source, BatchId batch, RowSeq row,
 Status Store::GetRawRecord(SourceId source, BatchId batch, RowSeq row,
                            std::string* out) {
   return db_->Get(lsm::ReadOptions{}, Slice(EncodeRawKey(source, batch, row)), out);
+}
+
+std::unique_ptr<RangeIterator> Store::ScanRawBatch(SourceId source, BatchId batch) {
+  return NewPrefixIterator(RawBatchPrefix(source, batch));
+}
+
+// --- source records ---
+
+Status Store::PutSourceRecord(SourceId source, uint64_t natural_key_hash,
+                              const Slice& bytes) {
+  return db_->Put(lsm::WriteOptions{},
+                  Slice(EncodeSourceRecordKey(source, natural_key_hash)), bytes);
+}
+
+Status Store::GetSourceRecord(SourceId source, uint64_t natural_key_hash,
+                              std::string* out) {
+  return db_->Get(lsm::ReadOptions{},
+                  Slice(EncodeSourceRecordKey(source, natural_key_hash)), out);
+}
+
+std::unique_ptr<RangeIterator> Store::ScanSourceRecords(SourceId source) {
+  return NewPrefixIterator(SourceRecordPrefix(source));
+}
+
+// --- ingest manifests ---
+
+Status Store::PutIngestManifest(SourceId source, BatchId batch,
+                                const Slice& bytes) {
+  return db_->Put(lsm::WriteOptions{}, Slice(EncodeIngestKey(source, batch)),
+                  bytes);
+}
+
+std::unique_ptr<RangeIterator> Store::ScanIngest(SourceId source) {
+  return NewPrefixIterator(IngestPrefix(source));
 }
 
 // --- graph traversal ---

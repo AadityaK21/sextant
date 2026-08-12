@@ -1,6 +1,7 @@
 add_library(sextant_codec
   ulid.cpp
   ordered.cpp
+  hash.cpp
   keyspace.cpp
   store.cpp
 )
@@ -11,6 +12,6 @@ target_include_directories(sextant_codec
 )
 
 target_compile_features(sextant_codec PUBLIC cxx_std_20)
-target_link_libraries(sextant_codec PUBLIC sextant_lsm)
+target_link_libraries(sextant_codec PUBLIC sextant_lsm PRIVATE sextant_warnings)
 
 add_library(sextant::codec ALIAS sextant_codec)

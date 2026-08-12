@@ -10,6 +10,42 @@
 #     be populated - declarative physical layout, not a hardcoded index
 #
 # See docs/ARCHITECTURE.md §6.
+#
+# ---------------------------------------------------------------------------
+# WHY EVERY id: IS WRITTEN OUT BY HAND
+#
+# These numbers are not decoration. They are the bytes in every key on disk:
+#
+#     IDX  | type_id(2) | prop_id(2) | value | entity_id
+#     PROV | entity_id  | prop_id(2) | version
+#     TIDX | link_id(2) | anchor     | timestamp | entity_id
+#
+# The tempting alternative is to derive them - hash the name, or number the
+# types in file order. Both are wrong for the same reason: they make the
+# on-disk layout depend on something a person can change without noticing.
+# Reorder two entries and every key already written points at the wrong
+# property; rename `lat` to `latitude` and a hash-derived id silently orphans
+# every value ever stored under it.
+#
+# Written down, an id is a decision with a diff. The loader rejects duplicates,
+# so the failure mode is a startup error rather than corrupt data.
+#
+# Property ids are unique across the whole schema, not per type. PROV keys
+# carry a property id but no type id, and a globally unique id means a
+# provenance record can be read without first knowing what kind of entity it
+# belongs to.
+#
+# RULE: ids are append-only. Never reuse one, never renumber.
+#
+# ---------------------------------------------------------------------------
+# WHERE VALIDATION LIVES
+#
+# There is deliberately no `validate:` key here. Validation belongs in the
+# mapping's transform chain instead, because that is the only place where a
+# rejection can be recorded in lineage. A schema-level check would tell you a
+# value was dropped; a chain-level one tells you which source row, which
+# column and which rule dropped it - which is the question people actually
+# ask.
 
 version: 1
 namespace: maritime
@@ -17,48 +53,51 @@ namespace: maritime
 entity_types:
 
   Port:
+    id: 1
     description: A place where vessels call. The hardest thing in this dataset
       to resolve, because it appears as "Rotterdam", "ROTTERDAM", "Port of
       Rotterdam" and "NLRTM" across four sources.
     properties:
-      name:        { type: string,   title: true,   fuse: most_trusted }
-      locode:      { type: string,   indexed: true, unique_hint: true, fuse: most_trusted,
-                     validate: locode_format }
-      alt_names:   { type: "string[]", fuse: union }
-      country:     { type: string,   indexed: true, fuse: most_frequent }
-      lat:         { type: double,   fuse: numeric_median }
-      lon:         { type: double,   fuse: numeric_median }
-      harbor_size: { type: enum, values: [V, L, M, S], fuse: most_trusted }
+      name:        { id: 1, type: string,   title: true,   fuse: most_trusted }
+      locode:      { id: 2, type: string,   indexed: true, unique_hint: true,
+                     fuse: most_trusted }
+      alt_names:   { id: 3, type: "string[]", fuse: union }
+      country:     { id: 4, type: string,   indexed: true, fuse: most_frequent }
+      lat:         { id: 5, type: double,   indexed: true, fuse: numeric_median }
+      lon:         { id: 6, type: double,   indexed: true, fuse: numeric_median }
+      harbor_size: { id: 7, type: enum, values: [V, L, M, S], fuse: most_trusted }
     display: "{name} ({locode})"
 
   Vessel:
+    id: 2
     description: A hull. Note the identifier asymmetry encoded in the resolver
       config - IMO is permanent for the life of the hull, MMSI is tied to the
       radio licence and is REASSIGNED on reflagging.
     properties:
-      name:          { type: string, title: true, fuse: most_recent }
-      imo:           { type: string, indexed: true, unique_hint: true,
-                       validate: imo_checksum }
-      mmsi:          { type: string, indexed: true }
-      call_sign:     { type: string }
-      flag:          { type: string, indexed: true, fuse: most_recent }
-      ship_type:     { type: int }
-      gross_tonnage: { type: int, fuse: most_trusted }
+      name:          { id: 10, type: string, title: true, fuse: most_recent }
+      imo:           { id: 11, type: string, indexed: true, unique_hint: true }
+      mmsi:          { id: 12, type: string, indexed: true }
+      call_sign:     { id: 13, type: string }
+      flag:          { id: 14, type: string, indexed: true, fuse: most_recent }
+      ship_type:     { id: 15, type: int }
+      gross_tonnage: { id: 16, type: int, fuse: most_trusted }
     display: "{name} [IMO {imo}]"
 
   Voyage:
+    id: 3
     description: One vessel movement between two ports. Digitraffic port-calls
       map onto this almost directly.
     properties:
-      voyage_ref:  { type: string, title: true }
-      departed_at: { type: timestamp, indexed: true }
-      arrived_at:  { type: timestamp, indexed: true }
-      cargo:       { type: string }
+      voyage_ref:  { id: 20, type: string, title: true }
+      departed_at: { id: 21, type: timestamp, indexed: true }
+      arrived_at:  { id: 22, type: timestamp, indexed: true }
+      cargo:       { id: 23, type: string }
     display: "{voyage_ref}"
 
 link_types:
 
   departs_from:
+    id: 1
     from: Voyage
     to: Port
     cardinality: many_to_one
@@ -66,6 +105,7 @@ link_types:
     time_index: departed_at     # -> populates TIDX, see docs/ARCHITECTURE.md §5
 
   arrives_at:
+    id: 2
     from: Voyage
     to: Port
     cardinality: many_to_one
@@ -73,6 +113,7 @@ link_types:
     time_index: arrived_at      # this is what makes the quarter-query a range scan
 
   operated_by:
+    id: 3
     from: Voyage
     to: Vessel
     cardinality: many_to_one

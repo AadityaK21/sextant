@@ -237,6 +237,7 @@ One byte of keyspace prefix, then a fixed layout. All integers big-endian so byt
 | `0x09` | `IDX` | `type(2) ‖ prop(2) ‖ value ‖ 0x00 ‖ eid(16)` | ∅ (secondary index) |
 | `0x0A` | `TIDX` | `link_type(2) ‖ anchor_eid(16) ‖ ts_be(8) ‖ eid(16)` | ∅ (time-ordered traversal) |
 | `0x0B` | `CAND` | `score_inv(4) ‖ pair_hash(8)` | ER candidate pair awaiting review |
+| `0x0C` | `INGEST` | `src(4) ‖ batch(8)` | `BatchManifest` - what one ingest run loaded |
 
 **Entity IDs are ULIDs** (16 bytes: 48-bit timestamp + 80 bits random). Lexicographically sortable, time-ordered, no coordination needed. Better than UUIDv4 here because sorted IDs mean entities created together sit together on disk.
 
@@ -247,6 +248,18 @@ One byte of keyspace prefix, then a fixed layout. All integers big-endian so byt
 - **`TIDX` is why the quarter-query is fast.** `0x0A ‖ arrives_at ‖ rotterdam_eid ‖ ts` with a big-endian timestamp means "all voyages into Rotterdam between April and July" is a *range scan over a contiguous byte range*, not a scan-and-filter. Say exactly this in the interview.
 - **`CAND` uses inverted score** (`UINT32_MAX − score`) as the key prefix, so scanning the review queue naturally returns the most-uncertain pairs first.
 - **`PROV` versioned by LSM sequence number** means provenance history is append-only and ordered for free.
+- **`INGEST` exists because `RAW` is append-only.** That immutability is what makes lineage permanent, and it is also why the archive has no opinion about duplication: run the same ingest twice and you get two copies of every row with no way to tell afterwards. A manifest per batch - including a fingerprint of the input bytes - makes a repeated ingest of an unchanged file a no-op, while a *changed* file still gets a new batch and never overwrites the old one.
+
+### `RAW` and `SRCREC` behave in opposite ways, on purpose
+
+`RAW` is keyed by `(source, batch, row)` and is never overwritten. `SRCREC` is keyed by `(source, natural_key_hash)` with **no batch in the key**, so a new batch replaces the normalised view of each row.
+
+That asymmetry is the whole design:
+
+> `RAW` answers *"what did the source say on the 3rd of April"*.
+> `SRCREC` answers *"what does the source say now"*.
+
+Entity resolution wants the second - it should compare current records, not every historical version of them. Lineage wants the first, permanently. Conflating them would cost one or the other.
 
 ---
 

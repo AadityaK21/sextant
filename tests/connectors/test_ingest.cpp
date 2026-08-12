@@ -1,0 +1,538 @@
+// Ingestion, end to end against a real store.
+//
+// The interesting properties are the ones about batches: a re-ingest of an
+// unchanged input does nothing, a changed input never destroys what came
+// before, and a row's RAW bytes and its normalised records land together or not
+// at all.
+
+#include "ingest.h"
+
+#include <gtest/gtest.h>
+
+#include <cstdint>
+#include <cstdio>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "bundle.h"
+#include "csv.h"
+#include "env.h"
+#include "json_source.h"
+#include "postgres.h"
+#include "record.h"
+#include "store.h"
+
+using namespace sextant::connectors;
+
+namespace onto = sextant::ontology;
+namespace codec = sextant::codec;
+namespace lsm = sextant::lsm;
+
+namespace {
+
+std::string SourceDir() { return std::string(SEXTANT_SOURCE_DIR); }
+
+class IngestTest : public ::testing::Test {
+ protected:
+  std::string dbname_;
+  std::unique_ptr<codec::Store> store_;
+  onto::SchemaBundle bundle_;
+
+  void SetUp() override {
+    dbname_ = std::string("ingesttest_") +
+              ::testing::UnitTest::GetInstance()->current_test_info()->name();
+    Destroy();
+    lsm::Options options;
+    options.create_if_missing = true;
+    ASSERT_TRUE(codec::Store::Open(options, dbname_, &store_).ok());
+
+    const Status s = onto::SchemaBundle::LoadFromDir(SourceDir() + "/schema", &bundle_);
+    ASSERT_TRUE(s.ok()) << s.ToString();
+  }
+
+  void TearDown() override {
+    store_.reset();
+    Destroy();
+  }
+
+  void Destroy() {
+    std::vector<std::string> children;
+    if (lsm::GetChildren(dbname_, &children).ok()) {
+      for (const auto& c : children) {
+        if (c == "." || c == "..") continue;
+        lsm::RemoveFile(dbname_ + "/" + c);
+      }
+    }
+    std::remove(dbname_.c_str());
+  }
+
+  Ingestor MakeIngestor() {
+    return Ingestor(store_.get(), &bundle_.ontology(), &bundle_.transforms());
+  }
+
+  // Ingest one of the shipped CSV sources.
+  Ingestor::Result IngestCsv(const char* key, const Ingestor::Options& options = {}) {
+    const onto::SourceSpec* spec = bundle_.Source(key);
+    EXPECT_NE(nullptr, spec);
+    const std::string path = SourceDir() + "/" + spec->uri;
+
+    uint64_t fingerprint = 0;
+    EXPECT_TRUE(Ingestor::FingerprintFile(path, &fingerprint).ok());
+    std::unique_ptr<CsvReader> reader;
+    EXPECT_TRUE(CsvReader::Open(path, &reader).ok());
+
+    Ingestor ingestor = MakeIngestor();
+    Ingestor::Result result;
+    const Status s = ingestor.Run(*spec, reader.get(), fingerprint, options, &result);
+    EXPECT_TRUE(s.ok()) << s.ToString();
+    return result;
+  }
+
+  uint64_t CountPrefix(std::unique_ptr<codec::RangeIterator> it) {
+    uint64_t n = 0;
+    for (; it->Valid(); it->Next()) ++n;
+    EXPECT_TRUE(it->status().ok());
+    return n;
+  }
+};
+
+}  // namespace
+
+TEST_F(IngestTest, WritesRawAndNormalisedRecordsForTheWorldPortIndex) {
+  const Ingestor::Result result = IngestCsv("wpi");
+  ASSERT_FALSE(result.skipped);
+  EXPECT_EQ(1u, result.batch);
+  EXPECT_GT(result.manifest.rows_read, 5u);
+  EXPECT_EQ(result.manifest.rows_read, result.manifest.records_written)
+      << "every World Port Index row is a Port";
+
+  const codec::SourceId src = bundle_.Source("wpi")->id;
+  EXPECT_EQ(result.manifest.rows_read, CountPrefix(store_->ScanRawBatch(src, 1)));
+  EXPECT_EQ(result.manifest.records_written,
+            CountPrefix(store_->ScanSourceRecords(src)));
+}
+
+// The transforms declared in wpi.yaml, checked on data rather than in isolation.
+TEST_F(IngestTest, NormalisationIsWhatTheMappingSaidItWouldBe) {
+  IngestCsv("wpi");
+  const onto::SourceSpec* spec = bundle_.Source("wpi");
+  const onto::EntityTypeDef* port = bundle_.ontology().Type("Port");
+  ASSERT_NE(nullptr, port);
+
+  bool saw_rotterdam = false;
+  auto it = store_->ScanSourceRecords(spec->id);
+  for (; it->Valid(); it->Next()) {
+    lsm::Slice value = it->value();
+    onto::SourceRecord rec;
+    ASSERT_TRUE(onto::SourceRecord::DecodeFrom(&value, &rec));
+    ASSERT_TRUE(value.empty());
+
+    const onto::PropertyCell* locode = rec.Property(port->Property("locode")->id);
+    if (locode == nullptr || locode->value.IsNull()) continue;
+    if (locode->value.AsString() != "NLRTM") continue;
+    saw_rotterdam = true;
+
+    // ALL CAPS in the file, title cased by the chain.
+    const onto::PropertyCell* name = rec.Property(port->Property("name")->id);
+    ASSERT_NE(nullptr, name);
+    EXPECT_EQ("Rotterdam", name->value.AsString());
+    EXPECT_EQ("ROTTERDAM", name->raw_value);
+    EXPECT_EQ("Main Port Name", name->origin.column);
+
+    // Semicolon separated in one column, a list in the ontology.
+    const onto::PropertyCell* alts = rec.Property(port->Property("alt_names")->id);
+    ASSERT_NE(nullptr, alts);
+    ASSERT_EQ(onto::ValueType::kStringList, alts->value.type());
+    EXPECT_EQ(3u, alts->value.AsStringList().size());
+
+    const onto::PropertyCell* size =
+        rec.Property(port->Property("harbor_size")->id);
+    ASSERT_NE(nullptr, size);
+    EXPECT_EQ("L", size->value.AsString()) << "\"Large\" should become L";
+  }
+  EXPECT_TRUE(saw_rotterdam);
+}
+
+// UN/LOCODE is where the diacritics and the degree-minute coordinates live, and
+// where the Function bitfield filter has to do real work.
+TEST_F(IngestTest, UnlocodeFiltersNonSeaportsAndConvertsCoordinates) {
+  const Ingestor::Result result = IngestCsv("unlocode");
+  ASSERT_FALSE(result.skipped);
+  EXPECT_GT(result.manifest.rows_filtered, 0u)
+      << "the sample includes an airport and an inland location, and the"
+         " Function bitfield filter is supposed to drop them";
+  EXPECT_EQ(result.manifest.rows_read - result.manifest.rows_filtered,
+            result.manifest.records_written);
+
+  const onto::SourceSpec* spec = bundle_.Source("unlocode");
+  const onto::EntityTypeDef* port = bundle_.ontology().Type("Port");
+
+  bool saw_goteborg = false;
+  auto it = store_->ScanSourceRecords(spec->id);
+  for (; it->Valid(); it->Next()) {
+    lsm::Slice value = it->value();
+    onto::SourceRecord rec;
+    ASSERT_TRUE(onto::SourceRecord::DecodeFrom(&value, &rec));
+
+    const onto::PropertyCell* locode = rec.Property(port->Property("locode")->id);
+    if (locode == nullptr || locode->value.IsNull()) continue;
+    if (locode->value.AsString() != "SEGOT") continue;
+    saw_goteborg = true;
+
+    // Built from two columns, and both are named in the lineage.
+    EXPECT_EQ("Country+Location", locode->origin.column);
+
+    const onto::PropertyCell* lat = rec.Property(port->Property("lat")->id);
+    ASSERT_NE(nullptr, lat);
+    ASSERT_EQ(onto::ValueType::kDouble, lat->value.type());
+    EXPECT_NEAR(57.70, lat->value.AsDouble(), 0.01);
+    EXPECT_EQ("5742N 01156E", lat->raw_value);
+
+    const onto::PropertyCell* name = rec.Property(port->Property("name")->id);
+    ASSERT_NE(nullptr, name);
+    EXPECT_EQ("Goteborg", name->value.AsString())
+        << "the mapping reads NameWoDiacritics";
+  }
+  EXPECT_TRUE(saw_goteborg);
+}
+
+// A validate_* transform that rejects a value must leave the reason behind.
+// "Why does this vessel have no IMO" is the question the lineage panel answers.
+TEST_F(IngestTest, RejectionsArePreservedWithTheirReasons) {
+  const onto::SourceSpec* spec = bundle_.Source("digitraffic");
+  ASSERT_NE(nullptr, spec);
+  SnapshotFetcher fetcher(SourceDir() + "/data/snapshots/digitraffic");
+  std::string body;
+  ASSERT_TRUE(fetcher.Fetch("vessel_details", "/", &body).ok());
+
+  std::unique_ptr<JsonRowSource> rows;
+  ASSERT_TRUE(JsonRowSource::Open(body, "", "vessel_details", &rows).ok());
+
+  Ingestor ingestor = MakeIngestor();
+  Ingestor::Result result;
+  ASSERT_TRUE(ingestor
+                  .Run(*spec, rows.get(), Ingestor::FingerprintBytes(body), {},
+                       &result)
+                  .ok());
+  EXPECT_GT(result.manifest.properties_rejected, 0u);
+
+  const onto::EntityTypeDef* vessel = bundle_.ontology().Type("Vessel");
+  int bad_checksums = 0, out_of_range_types = 0, unassigned_flags = 0;
+  auto it = store_->ScanSourceRecords(spec->id);
+  for (; it->Valid(); it->Next()) {
+    lsm::Slice value = it->value();
+    onto::SourceRecord rec;
+    ASSERT_TRUE(onto::SourceRecord::DecodeFrom(&value, &rec));
+    if (rec.type != vessel->id) continue;
+
+    const onto::PropertyCell* imo = rec.Property(vessel->Property("imo")->id);
+    if (imo != nullptr && imo->rejected()) {
+      ++bad_checksums;
+      EXPECT_NE(std::string::npos, imo->error.find("check digit"));
+      EXPECT_FALSE(imo->raw_value.empty()) << "the rejected bytes must survive";
+    }
+    const onto::PropertyCell* type =
+        rec.Property(vessel->Property("ship_type")->id);
+    if (type != nullptr && type->rejected()) {
+      ++out_of_range_types;
+      EXPECT_NE(std::string::npos, type->error.find("0-99"));
+    }
+    // An unassigned MID is a quiet null, not a rejection: roughly one AIS
+    // transmitter in twenty broadcasts a malformed MMSI, and complaining about
+    // each one would bury the failures that matter.
+    const onto::PropertyCell* flag = rec.Property(vessel->Property("flag")->id);
+    if (flag != nullptr && flag->value.IsNull()) {
+      ++unassigned_flags;
+      EXPECT_FALSE(flag->rejected());
+    }
+  }
+  EXPECT_EQ(1, bad_checksums);
+  EXPECT_EQ(1, out_of_range_types);
+  EXPECT_EQ(1, unassigned_flags);
+}
+
+TEST_F(IngestTest, PortCallsBecomeVoyagesWithThreeUnresolvedEdges) {
+  const onto::SourceSpec* spec = bundle_.Source("digitraffic");
+  SnapshotFetcher fetcher(SourceDir() + "/data/snapshots/digitraffic");
+  std::string body;
+  ASSERT_TRUE(fetcher.Fetch("port_calls", "/", &body).ok());
+
+  std::unique_ptr<JsonRowSource> rows;
+  ASSERT_TRUE(JsonRowSource::Open(body, "portCalls", "port_calls", &rows).ok());
+
+  Ingestor ingestor = MakeIngestor();
+  Ingestor::Result result;
+  ASSERT_TRUE(ingestor.Run(*spec, rows.get(), 0, {}, &result).ok());
+
+  const onto::EntityTypeDef* voyage = bundle_.ontology().Type("Voyage");
+  const onto::LinkTypeDef* arrives = bundle_.ontology().Link("arrives_at");
+  int voyages = 0, with_arrival_time = 0;
+  auto it = store_->ScanSourceRecords(spec->id);
+  for (; it->Valid(); it->Next()) {
+    lsm::Slice value = it->value();
+    onto::SourceRecord rec;
+    ASSERT_TRUE(onto::SourceRecord::DecodeFrom(&value, &rec));
+    if (rec.type != voyage->id) continue;
+    ++voyages;
+
+    // A port call implies three edges, none of which can be resolved until
+    // entity resolution has run, so they are carried by value.
+    EXPECT_EQ(3u, rec.links.size());
+    bool saw_arrives = false;
+    for (const auto& link : rec.links) {
+      if (link.link_type != arrives->id) continue;
+      saw_arrives = true;
+      EXPECT_EQ(bundle_.ontology().Type("Port")->id, link.target_type);
+      EXPECT_EQ(bundle_.ontology().Type("Port")->Property("locode")->id,
+                link.match_property);
+      EXPECT_FALSE(link.match_value.empty());
+    }
+    EXPECT_TRUE(saw_arrives);
+
+    const onto::PropertyCell* ata =
+        rec.Property(voyage->Property("arrived_at")->id);
+    if (ata == nullptr || ata->value.IsNull()) continue;
+    ++with_arrival_time;
+    EXPECT_EQ(onto::ValueType::kTimestamp, ata->value.type());
+    EXPECT_EQ("portAreaDetails[0].ata", ata->origin.column);
+    // Finnish local time, normalised to UTC. A timestamp that kept its offset
+    // would put the call in the wrong quarter for anyone querying in UTC.
+    EXPECT_NE(std::string::npos, ata->raw_value.find("+03:00"));
+    EXPECT_NE(std::string::npos, ata->value.ToDisplay().find('Z'));
+  }
+  EXPECT_GE(voyages, 5);
+  EXPECT_GE(with_arrival_time, 5);
+}
+
+// --- batches ----------------------------------------------------------------
+
+TEST_F(IngestTest, ReingestingAnUnchangedInputIsANoOp) {
+  const Ingestor::Result first = IngestCsv("wpi");
+  ASSERT_FALSE(first.skipped);
+
+  const Ingestor::Result second = IngestCsv("wpi");
+  EXPECT_TRUE(second.skipped);
+  EXPECT_EQ(first.batch, second.existing_batch);
+
+  const codec::SourceId src = bundle_.Source("wpi")->id;
+  EXPECT_EQ(first.manifest.rows_read, CountPrefix(store_->ScanRawBatch(src, 1)));
+  EXPECT_EQ(0u, CountPrefix(store_->ScanRawBatch(src, 2)))
+      << "the second run wrote a batch it should have skipped";
+}
+
+TEST_F(IngestTest, ForceOverridesTheIdempotencyCheck) {
+  const Ingestor::Result first = IngestCsv("wpi");
+  Ingestor::Options force;
+  force.force = true;
+  const Ingestor::Result second = IngestCsv("wpi", force);
+
+  ASSERT_FALSE(second.skipped);
+  EXPECT_EQ(first.batch + 1, second.batch);
+
+  const codec::SourceId src = bundle_.Source("wpi")->id;
+  // RAW keeps both. It is the immutable archive, and lineage written against
+  // batch 1 must keep resolving after batch 2 lands.
+  EXPECT_EQ(first.manifest.rows_read, CountPrefix(store_->ScanRawBatch(src, 1)));
+  EXPECT_EQ(second.manifest.rows_read, CountPrefix(store_->ScanRawBatch(src, 2)));
+
+  // SRCREC does not. It is the current normalised view, keyed by natural key
+  // with no batch in it, so the second run replaced the first rather than
+  // doubling it.
+  EXPECT_EQ(first.manifest.records_written,
+            CountPrefix(store_->ScanSourceRecords(src)));
+
+  std::vector<onto::BatchManifest> batches;
+  Ingestor ingestor = MakeIngestor();
+  ASSERT_TRUE(ingestor.ListBatches(src, &batches).ok());
+  EXPECT_EQ(2u, batches.size());
+}
+
+// A batch that cannot be fingerprinted - a Postgres query, say - always gets a
+// new batch id. Pretending otherwise would mean skipping a run whose input may
+// well have changed.
+TEST_F(IngestTest, InputsWithNoFingerprintAlwaysGetANewBatch) {
+  const onto::SourceSpec* spec = bundle_.Source("marinecadastre");
+  ASSERT_NE(nullptr, spec);
+
+  const std::vector<std::string> columns = {"mmsi", "imo", "vessel_name",
+                                            "call_sign", "vessel_type"};
+  Ingestor ingestor = MakeIngestor();
+  for (int run = 1; run <= 2; ++run) {
+    MemoryTableSource rows(columns, {{"230123456", "IMO9074729", "AURORA BOREALIS",
+                                      "OJKL", "70"},
+                                     {"636012345", "", "monrovia  star", "a8wx",
+                                      "80"}});
+    Ingestor::Result result;
+    ASSERT_TRUE(ingestor.Run(*spec, &rows, /*content_fingerprint=*/0, {}, &result).ok());
+    EXPECT_FALSE(result.skipped);
+    EXPECT_EQ(static_cast<uint64_t>(run), result.batch);
+  }
+
+  const onto::EntityTypeDef* vessel = bundle_.ontology().Type("Vessel");
+  bool saw_aurora = false;
+  auto it = store_->ScanSourceRecords(spec->id);
+  for (; it->Valid(); it->Next()) {
+    lsm::Slice value = it->value();
+    onto::SourceRecord rec;
+    ASSERT_TRUE(onto::SourceRecord::DecodeFrom(&value, &rec));
+    const onto::PropertyCell* imo = rec.Property(vessel->Property("imo")->id);
+    if (imo == nullptr || imo->value.IsNull()) continue;
+    saw_aurora = true;
+    EXPECT_EQ("9074729", imo->value.AsString()) << "strip_imo_prefix did not run";
+    const onto::PropertyCell* flag = rec.Property(vessel->Property("flag")->id);
+    ASSERT_NE(nullptr, flag);
+    EXPECT_EQ("FI", flag->value.AsString())
+        << "the flag is derived from the MMSI's first three digits";
+  }
+  EXPECT_TRUE(saw_aurora);
+
+  // The natural key is the MMSI alone, so two runs over the same two hulls
+  // leave two records rather than four.
+  EXPECT_EQ(2u, CountPrefix(store_->ScanSourceRecords(spec->id)));
+}
+
+// RAW and the SourceRecords a row produced go in as one write batch. A crash
+// between them would leave provenance pointing at bytes that are not there,
+// which is the one state that makes a lineage question unanswerable.
+TEST_F(IngestTest, EveryNormalisedRecordHasItsRawRowOnDisk) {
+  IngestCsv("wpi");
+  IngestCsv("unlocode");
+
+  for (const char* key : {"wpi", "unlocode"}) {
+    const onto::SourceSpec* spec = bundle_.Source(key);
+    uint64_t checked = 0;
+    auto it = store_->ScanSourceRecords(spec->id);
+    for (; it->Valid(); it->Next()) {
+      lsm::Slice value = it->value();
+      onto::SourceRecord rec;
+      ASSERT_TRUE(onto::SourceRecord::DecodeFrom(&value, &rec));
+
+      std::string raw;
+      ASSERT_TRUE(
+          store_->GetRawRecord(rec.source_id, rec.batch_id, rec.row_seq, &raw).ok())
+          << key << ": record " << rec.natural_key << " has no raw row";
+      EXPECT_FALSE(raw.empty());
+
+      // And every property points at that same row.
+      for (const auto& p : rec.properties) {
+        EXPECT_EQ(rec.source_id, p.origin.source_id);
+        EXPECT_EQ(rec.batch_id, p.origin.batch_id);
+        EXPECT_EQ(rec.row_seq, p.origin.row_seq);
+        EXPECT_FALSE(p.origin.column.empty());
+      }
+      ++checked;
+    }
+    EXPECT_GT(checked, 0u) << key;
+  }
+}
+
+// The round-trip the whole lineage claim rests on, run over real ingested data:
+// take the recorded chain and the recorded raw cell, re-run it, and assert the
+// result is the value that was stored. This is the day 11 headline test in
+// miniature - it runs on source records rather than resolved entities, but the
+// property it checks is the same one.
+TEST_F(IngestTest, EveryStoredValueReplaysFromItsRecordedChain) {
+  IngestCsv("wpi");
+  IngestCsv("unlocode");
+
+  uint64_t replayed = 0;
+  for (const char* key : {"wpi", "unlocode"}) {
+    const onto::SourceSpec* spec = bundle_.Source(key);
+    auto it = store_->ScanSourceRecords(spec->id);
+    for (; it->Valid(); it->Next()) {
+      lsm::Slice value = it->value();
+      onto::SourceRecord rec;
+      ASSERT_TRUE(onto::SourceRecord::DecodeFrom(&value, &rec));
+
+      for (const auto& cell : rec.properties) {
+        // A multi-column property's raw value is the joined cells, which the
+        // chain expects as a list rather than a string.
+        onto::TValue input;
+        if (cell.origin.column.find('+') == std::string::npos) {
+          input = onto::TValue::String(cell.raw_value);
+        } else {
+          std::vector<std::string> parts;
+          std::string current;
+          for (const char c : cell.raw_value) {
+            if (c == '\x1f') {
+              parts.push_back(current);
+              current.clear();
+            } else {
+              current.push_back(c);
+            }
+          }
+          parts.push_back(current);
+          input = onto::TValue::StringList(parts);
+        }
+
+        std::string error;
+        onto::TValue result =
+            bundle_.transforms().Apply(cell.chain, input, &error);
+
+        // The mapper coerces to the declared type after the chain runs, so the
+        // replay has to apply the same coercion to compare like with like.
+        const onto::EntityTypeDef* type = bundle_.ontology().Type(rec.type);
+        const onto::PropertyDef* def = type->Property(cell.prop);
+        if (!result.IsNull() && def->type == onto::ValueType::kStringList &&
+            result.type() == onto::ValueType::kString) {
+          result = onto::TValue::StringList({result.AsString()});
+        }
+
+        EXPECT_EQ(cell.value, result)
+            << key << " " << rec.natural_key << "." << def->name
+            << ": replaying the stored chain over the stored raw value did not"
+               " reproduce the stored value";
+        EXPECT_EQ(cell.error, error);
+        EXPECT_EQ(bundle_.transforms().ChainFingerprint(cell.chain),
+                  cell.chain_fingerprint);
+        ++replayed;
+      }
+    }
+  }
+  EXPECT_GT(replayed, 50u) << "the test did not actually look at much";
+}
+
+// --- stats ------------------------------------------------------------------
+
+TEST_F(IngestTest, StatsReportWhatWasLoaded) {
+  IngestCsv("wpi");
+  Ingestor::Options force;
+  force.force = true;
+  IngestCsv("wpi", force);
+
+  SourceStats stats;
+  ASSERT_TRUE(CollectSourceStats(store_.get(), *bundle_.Source("wpi"), &stats).ok());
+  EXPECT_EQ(2u, stats.batches);
+  EXPECT_EQ(2u, stats.latest_batch);
+  EXPECT_GT(stats.raw_records, 0u);
+  EXPECT_EQ(stats.raw_records, stats.source_records * 2)
+      << "RAW keeps both batches, SRCREC keeps one view";
+
+  // A source that was never ingested reports zeros rather than failing.
+  SourceStats empty;
+  ASSERT_TRUE(
+      CollectSourceStats(store_.get(), *bundle_.Source("digitraffic"), &empty).ok());
+  EXPECT_EQ(0u, empty.batches);
+  EXPECT_EQ(0u, empty.raw_records);
+}
+
+TEST_F(IngestTest, LimitStopsEarlyWithoutCorruptingTheBatch) {
+  Ingestor::Options options;
+  options.limit = 3;
+  const Ingestor::Result result = IngestCsv("wpi", options);
+  ASSERT_FALSE(result.skipped);
+  EXPECT_EQ(3u, result.manifest.rows_read);
+  EXPECT_EQ(3u, CountPrefix(store_->ScanRawBatch(bundle_.Source("wpi")->id, 1)));
+}
+
+TEST(PostgresConnector, ReportsItselfClearlyWhenTheBuildHasNoLibpq) {
+  if (PostgresAvailable()) {
+    GTEST_SKIP() << "this build has libpq; the stub path is not reachable";
+  }
+  std::unique_ptr<PostgresSource> src;
+  const Status s = PostgresSource::Open("postgresql://nowhere", "SELECT 1", {}, &src);
+  ASSERT_FALSE(s.ok());
+  EXPECT_TRUE(s.IsNotSupported());
+  EXPECT_NE(std::string::npos, s.ToString().find("libpq"));
+}

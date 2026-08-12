@@ -28,6 +28,12 @@ fetch_unlocode() {
   # The datasets/un-locode mirror is pre-parsed and stable, which is what we
   # want for a reproducible build. Record which one you used in the batch
   # manifest so lineage stays honest.
+  #
+  # The mirror also carries a HEADER ROW, which the official distribution does
+  # not. That matters more than it sounds: without one, a mapping would have to
+  # address columns by position (`from: 5`), and the day the upstream format
+  # inserts a column every value silently shifts one place to the left. Naming
+  # the column makes that a load error instead.
   curl -fsSL -A "$UA" \
     -o "$SNAP/unlocode/code-list.csv" \
     "https://raw.githubusercontent.com/datasets/un-locode/main/data/code-list.csv"
@@ -58,9 +64,16 @@ EOF
 
 fetch_digitraffic() {
   log "Fintraffic Digitraffic (marine)"
+
+  # LAYOUT NOTE. The connector reads data/snapshots/digitraffic/<endpoint>.json,
+  # flat, because that is what `snapshot_dir` in the mapping file points at. So
+  # the live files are written there and a timestamped copy goes into archive/
+  # alongside. No symlinks: they do not survive a clone on Windows, and this
+  # project is built there.
+  local live="$SNAP/digitraffic"
   local batch; batch="$(date -u +%Y%m%dT%H%M%SZ)"
-  local out="$SNAP/digitraffic/$batch"
-  mkdir -p "$out"
+  local archive="$live/archive/$batch"
+  mkdir -p "$live" "$archive"
 
   # Free and keyless. The Digitraffic-User header is requested by their terms.
   local base="https://meri.digitraffic.fi"
@@ -76,13 +89,14 @@ fetch_digitraffic() {
     curl -fsSL --compressed \
       -H "Digitraffic-User: $UA" \
       -H "Accept: application/json" \
-      -o "$out/$name.json" \
+      -o "$archive/$name.json" \
       "$base/api/$path"
-    printf '     %s  %s bytes\n' "$name.json" "$(wc -c < "$out/$name.json")"
+    cp "$archive/$name.json" "$live/$name.json"
+    printf '     %s  %s bytes\n' "$name.json" "$(wc -c < "$live/$name.json")"
   done
 
-  ln -sfn "$batch" "$SNAP/digitraffic/latest"
-  echo "$batch" > "$SNAP/digitraffic/LATEST_BATCH"
+  echo "$batch" > "$live/LATEST_BATCH"
+  log "  live responses in $live, archived copy in $archive"
 }
 
 fetch_ais() {

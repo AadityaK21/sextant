@@ -34,8 +34,8 @@ constexpr PropId kLocode = 2;
 constexpr PropId kLatitude = 3;
 
 // Milliseconds, so windows read like real quarters.
-constexpr int64_t kQ2Start = 1'743'465'600'000LL;  // 2026-04-01
-constexpr int64_t kQ3Start = 1'751'328'000'000LL;  // 2026-07-01
+constexpr int64_t kQ2Start = 1'743'465'600'000LL;  // 2025-04-01
+constexpr int64_t kQ3Start = 1'751'328'000'000LL;  // 2025-07-01
 
 class StoreTest : public ::testing::Test {
  protected:

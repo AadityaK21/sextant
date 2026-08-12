@@ -19,6 +19,7 @@
 //   0x09    IDX       type(2) prop(2) <ordered value> eid(16)       empty
 //   0x0A    TIDX      link_type(2) anchor_eid(16) ts_be(8) eid(16)  empty
 //   0x0B    CAND      score_inv(4) pair_hash(8)                     candidate pair
+//   0x0C    INGEST    src(4) batch(8)                               BatchManifest
 //
 // THREE LAYOUT DECISIONS WORTH DEFENDING
 //
@@ -63,6 +64,7 @@ enum class Keyspace : uint8_t {
   kIndex = 0x09,
   kTimeIndex = 0x0A,
   kCandidate = 0x0B,
+  kIngest = 0x0C,
 };
 
 using SourceId = uint32_t;
@@ -167,6 +169,21 @@ std::string TimeIndexBound(LinkTypeId link_type, const Ulid& anchor,
 std::string EncodeCandidateKey(double score, uint64_t pair_hash);
 bool DecodeCandidateKey(const Slice& key, double* score, uint64_t* pair_hash);
 std::string CandidatePrefix();
+
+// --- INGEST: one record per ingest run --------------------------------------
+//
+// Added in the connector milestone. RAW is append-only, which is what makes
+// lineage permanent, but it also means "have I loaded this file already?" has
+// no answer inside RAW itself - every re-ingest just appends another batch.
+// This keyspace records what each batch was, including a fingerprint of the
+// input bytes, so a repeated ingest of an unchanged file is a no-op while a
+// changed file gets a new batch and never overwrites the old one.
+//
+// Batch ids ascend, so scanning the prefix backwards from the upper bound
+// gives the most recent batch for a source.
+std::string EncodeIngestKey(SourceId source, BatchId batch);
+bool DecodeIngestKey(const Slice& key, SourceId* source, BatchId* batch);
+std::string IngestPrefix(SourceId source);
 
 // --- helpers ----------------------------------------------------------------
 

@@ -1,0 +1,13 @@
+World Port Index Number,Region Name,Main Port Name,Alternate Port Name,UN/LOCODE,Country Code,World Water Body,Harbor Size,Harbor Type,Latitude,Longitude
+14370,North Sea,ROTTERDAM,"Rotterdam Botlek; Europoort; Maasvlakte",NLRTM,NL,North Sea,Large,Coastal Natural,51.9167,4.4833
+14170,North Sea,HAMBURG,Freihafen Hamburg,DEHAM,DE,North Sea,Large,River Natural,53.5500,9.9667
+14290,North Sea,ANTWERP,"Antwerpen; Anvers",BEANR,BE,North Sea,Large,River Basin,51.2167,4.4167
+14710,English Channel,LE HAVRE,,FRLEH,FR,English Channel,Large,Coastal Breakwater,49.4833,0.1167
+26010,Baltic Sea,HELSINKI,Helsingfors,FIHEL,FI,Baltic Sea,Medium,Coastal Natural,60.1667,24.9667
+26050,Baltic Sea,KOTKA,,FIKTK,FI,Baltic Sea,Small,Coastal Natural,60.4667,26.9500
+25510,Baltic Sea,GOTEBORG,"Gothenburg; Goteborg Hamn",SEGOT,SE,Kattegat,Large,Coastal Natural,57.7000,11.9333
+55110,Singapore Strait,SINGAPORE,Port of Singapore,SGSIN,SG,Singapore Strait,Large,Coastal Natural,1.2644,103.8400
+49700,North Atlantic Ocean,NEW YORK,"New York and New Jersey",USNYC,US,North Atlantic Ocean,Large,River Natural,40.6667,-74.0333
+14375,North Sea,ROTTERDAM BOTLEK,,,NL,North Sea,Medium,River Basin,51.8833,4.2833
+26055,Baltic Sea,Rauma,,FIRAU,FI,Baltic Sea,Small,Coastal Natural,61.1333,21.5000
+14180,North Sea,Bremerhaven,,DEBRV,DE,North Sea,Large,River Natural,53.5500,8.5833

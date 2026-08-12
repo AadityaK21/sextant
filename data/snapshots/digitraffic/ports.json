@@ -1,0 +1,13 @@
+[
+  { "locode": "FIHEL", "portName": "HELSINKI", "country": "FI" },
+  { "locode": "FIKTK", "portName": "KOTKA", "country": "FI" },
+  { "locode": "FITKU", "portName": "TURKU", "country": "FI" },
+  { "locode": "FIRAU", "portName": "RAUMA", "country": "FI" },
+  { "locode": "FIPOR", "portName": "PORI", "country": "FI" },
+  { "locode": "FIOUL", "portName": "OULU", "country": "FI" },
+  { "locode": "FIHKO", "portName": "HANKO", "country": "FI" },
+  { "locode": "NLRTM", "portName": "ROTTERDAM", "country": "NL" },
+  { "locode": "DEHAM", "portName": "HAMBURG", "country": "DE" },
+  { "locode": "SEGOT", "portName": "GOTEBORG", "country": "SE" },
+  { "locode": "XX", "portName": "UNKNOWN PORT", "country": "XX" }
+]

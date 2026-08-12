@@ -101,6 +101,33 @@ class EntityWriter {
   lsm::WriteBatch batch_;
 };
 
+// Everything produced by one input row, committed together.
+//
+// Ingest writes the verbatim bytes to RAW and one normalised SourceRecord per
+// mapping that matched - a Digitraffic port call yields a Voyage, and other
+// endpoints yield Ports and Vessels. Splitting those across separate writes
+// would allow a crash to leave a normalised record whose raw row is missing,
+// which is the one state that makes lineage unanswerable: the provenance points
+// somewhere, and there is nothing there.
+class RowWriter {
+ public:
+  RowWriter(Store* store, SourceId source, BatchId batch, RowSeq row);
+
+  // The original bytes, exactly as the source produced them.
+  RowWriter& SetRaw(const Slice& bytes);
+  RowWriter& AddSourceRecord(uint64_t natural_key_hash, const Slice& bytes);
+
+  int operations() const { return batch_.Count(); }
+  Status Commit(const lsm::WriteOptions& options = lsm::WriteOptions{});
+
+ private:
+  Store* store_;
+  SourceId source_;
+  BatchId batch_id_;
+  RowSeq row_;
+  lsm::WriteBatch batch_;
+};
+
 class Store {
  public:
   static Status Open(const lsm::Options& options, const std::string& path,
@@ -122,6 +149,27 @@ class Store {
   // --- raw records: the far end of every lineage chain ---
   Status PutRawRecord(SourceId source, BatchId batch, RowSeq row, const Slice& bytes);
   Status GetRawRecord(SourceId source, BatchId batch, RowSeq row, std::string* out);
+  std::unique_ptr<RangeIterator> ScanRawBatch(SourceId source, BatchId batch);
+
+  RowWriter NewRow(SourceId source, BatchId batch, RowSeq row) {
+    return RowWriter(this, source, batch, row);
+  }
+
+  // --- source records: one normalised row, keyed by its natural key ---
+  //
+  // Unlike RAW, this IS overwritten by a later batch. RAW is the immutable
+  // archive of what every ingest saw; SRCREC is the current normalised view of
+  // each source row, which is what entity resolution consumes. Keeping both is
+  // what lets a re-ingest update the picture without destroying the history.
+  Status PutSourceRecord(SourceId source, uint64_t natural_key_hash,
+                         const Slice& bytes);
+  Status GetSourceRecord(SourceId source, uint64_t natural_key_hash,
+                         std::string* out);
+  std::unique_ptr<RangeIterator> ScanSourceRecords(SourceId source);
+
+  // --- ingest manifests: what was loaded, when, and from what bytes ---
+  Status PutIngestManifest(SourceId source, BatchId batch, const Slice& bytes);
+  std::unique_ptr<RangeIterator> ScanIngest(SourceId source);
 
   // --- graph traversal ---
   std::unique_ptr<RangeIterator> ScanOutgoing(const Ulid& src, LinkTypeId type);
@@ -161,6 +209,7 @@ class Store {
 
  private:
   friend class EntityWriter;
+  friend class RowWriter;
 
   // Range-scan helper: seek to `from`, stop when a key reaches `until`.
   std::unique_ptr<RangeIterator> NewRangeIterator(const std::string& from,

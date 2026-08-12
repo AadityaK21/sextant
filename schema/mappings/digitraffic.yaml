@@ -14,6 +14,7 @@
 
 source:
   id: digitraffic
+  source_id: 3
   name: Fintraffic Digitraffic (marine)
   connector: http
   base_url: https://meri.digitraffic.fi
@@ -52,7 +53,7 @@ mappings:
       imo:           { from: "imo",          transform: [to_string, validate_imo] }
       mmsi:          { from: "mmsi",         transform: [to_string] }
       call_sign:     { from: "callSign",     transform: [trim, upper] }
-      ship_type:     { from: "vesselTypeCode", transform: [to_int] }
+      ship_type:     { from: "vesselTypeCode", transform: [to_int, normalize_ship_type] }
       gross_tonnage: { from: "grossTonnage", transform: [to_int] }
       # MMSI's first three digits are the MID, which encodes the flag state.
       # Deriving flag from it and cross-checking against the declared flag is a

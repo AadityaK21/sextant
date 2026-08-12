@@ -301,6 +301,82 @@ minutes of the first Windows compile.
 
 ---
 
+## A raw string literal ended in the middle of a schema          2026-08-13
+
+**Symptom.** Twenty compile errors in `test_schema.cpp`, starting with
+`missing terminating " character` and then complaining that `Voyage`,
+`arrived_at` and `link_types` were not types. None of those identifiers exist in
+the file - they are YAML.
+
+**Root cause.** The test schema was written as `R"( ... )"`, and it contained
+the line
+
+```yaml
+display: "{name} ({locode})"
+```
+
+A raw string ends at the first `)` followed by `"`. The literal terminated
+inside the YAML, and everything after it was compiled as C++.
+
+**Fix.** A delimiter the content cannot contain: `R"YAML( ... )YAML"`.
+
+**Lesson.** `R"(` is only safe for content you have read for `)"`. The failing
+line number pointed at the end of the schema and the error named identifiers
+from the data, which is the tell: when a compiler reports errors about words
+that only appear inside a string, the string is not a string any more.
+
+---
+
+## The IMO check digit does not catch every typo          2026-08-13
+
+**Symptom.** A test asserting that every single-digit corruption of a valid IMO
+number fails validation. It failed, on `9574729`, `9014729`, `9034729` and
+seven others. The checksum implementation matched the standard.
+
+**Root cause.** Not a bug in the code - a wrong belief, caught by a test that
+overclaimed. The IMO check digit weights the first six digits by 7, 6, 5, 4, 3,
+2 and compares the last digit of the sum. Changing a digit by `d` at weight `w`
+shifts the sum by `w*d`, which is invisible whenever `w*d` is a multiple of 10.
+Weights 7 and 3 are coprime to 10 and catch everything. Weight 6 misses a shift
+of five, weight 4 misses a shift of five, weight 2 misses a shift of five, and
+weight 5 misses **every even shift**. For `9074729`, 7 of the 63 possible
+single-digit typos validate as though nothing happened.
+
+**Fix.** The test now derives the expected answer from the weight
+(`(w * delta) % 10 != 0`) and asserts the implementation matches exactly,
+including the misses.
+
+**Lesson.** Worth more than the arithmetic: the resolver was going to treat an
+IMO match as near-proof of identity, and this is the difference between "the
+check digit rules out transcription errors" and "the check digit rules out most
+transcription errors". A test that asserts a property you have not actually
+proved is a good way to find out you were wrong about the domain, not just
+about the code.
+
+---
+
+## An ignore rule quietly excluded the data the tests needed          2026-08-13
+
+**Symptom.** Everything passed locally. The committed sample data was in the
+working tree, the tests read it, `sextant ingest` loaded it. But `git status`
+showed nothing to commit for `data/snapshots/`.
+
+**Root cause.** `.gitignore` had `data/snapshots/*` with a single exception for
+`data/snapshots/sample/`, a directory that never got created. The samples were
+written to `data/snapshots/wpi/` and friends, so every one of them was ignored.
+On any machine that cloned the repo, seven tests would have failed on missing
+files - and they would have failed in CI rather than here.
+
+**Fix.** Explicit un-ignore entries per committed directory, and a comment
+saying why they are listed one by one rather than by wildcard.
+
+**Lesson.** A negative pattern in `.gitignore` is a claim about a path that
+exists. When it stops being true, nothing tells you - the file simply is not
+there any more. Test fixtures that live outside the source tree are worth an
+explicit rule and a sentence explaining it.
+
+---
+
 <!-- Add entries as you go. Suggested candidates from the plan:
      - the first tombstone resurrection you hit once SSTables land (day 2-4)
      - whatever the lineage round-trip test catches on day 11 (it will catch

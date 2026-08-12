@@ -24,7 +24,7 @@ C++20 · React · no storage dependencies
 | **Day 3** - bloom filters, block cache, merging iterator | ✅ | 132 tests green |
 | **Day 4** - VersionSet/MANIFEST, leveled compaction | ✅ | 145 tests green |
 | **Day 5** - keyspace codec, ULID, ordered encodings | ✅ | 209 tests green |
-| Days 6-7 - ontology, transforms, three connectors | ⬜ | |
+| **Days 6-7** - ontology, transforms, three connectors | ✅ | 314 tests green |
 | Days 8-10 - entity resolution | ⬜ | |
 | Days 11-12 - lineage, query engine, HTTP API | ⬜ | |
 | Days 13-14 - React frontend | ⬜ | |
@@ -38,15 +38,65 @@ Plan: [`docs/EXECUTION_PLAN.md`](docs/EXECUTION_PLAN.md).
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build -j
-cd build && ctest --output-on-failure
+ctest --test-dir build --output-on-failure
 ```
 
+The same three lines work in PowerShell. Do not join them with `&&` there -
+Windows PowerShell 5 does not have it.
+
 Dependencies are fetched and version-pinned at configure time - nothing to
-install. Requires CMake ≥ 3.20 and a C++20 compiler.
+install. Requires CMake ≥ 3.20 and a C++20 compiler. Postgres is optional: if
+`libpq` is absent the SQL connector is stubbed and everything else still builds.
 
 ```bash
 ./build/bench/lsm_bench 200000 100      # benchmarks
 ```
+
+## Run it
+
+Small excerpts of every source are committed, so this works on a fresh clone
+with no network and no downloads.
+
+```bash
+./build/src/cli/sextant schema                      # the ontology, validated
+./build/src/cli/sextant ingest --source wpi         # NGA World Port Index (CSV)
+./build/src/cli/sextant ingest --source unlocode    # UN/LOCODE (CSV)
+./build/src/cli/sextant ingest --source digitraffic # Digitraffic (REST/JSON)
+./build/src/cli/sextant stats
+```
+
+On Windows, MSVC is a multi-config generator, so the binary lands one directory
+deeper. Run these from the repository root - the schema and data paths are
+relative to it:
+
+```powershell
+$sx = (Get-ChildItem -Recurse build -Filter sextant.exe)[0].FullName
+& $sx schema
+& $sx ingest --source wpi
+& $sx stats
+```
+
+```
+ingest unlocode (csv)
+  data/snapshots/unlocode/code-list.csv batch 1  17 rows -> 15 records,
+  90 values (0 rejected, 2 filtered) in 0 ms
+
+source            batches        raw    records   latest
+digitraffic             3         27         27        3
+unlocode                1         15         15        1
+wpi                     1         12         12        1
+```
+
+Run the same ingest twice and the second one does nothing - the input
+fingerprint has not changed. Then follow a value back to the bytes it came from:
+
+```bash
+./build/src/cli/sextant lineage --source unlocode --batch 1 --row 9
+# RAW unlocode batch 1 row 9
+# ,SE,GOT,Göteborg,Goteborg,14,AI,1234----,0401,GOT,5742N 01156E,
+```
+
+`./data/fetch.sh all` replaces the excerpts with the full datasets.
 
 ---
 
@@ -111,7 +161,7 @@ Filled in as milestones land. Every number here is reproducible with a command.
 |---|---|
 | Storage engine | 1.5M batched writes/sec · 3.7M misses/sec · write amplification **1.20x** · [full benchmarks](docs/BENCH.md) |
 | | Recovery bounded by buffer size, not data size: 2,013 records replayed instead of 202,200 |
-| Correctness | 209 tests green on Linux, Windows and macOS · clean under ASan + UBSan · lock-free skiplist clean under ThreadSanitizer |
+| Correctness | 314 tests green on Linux, Windows and macOS · clean under ASan + UBSan · lock-free skiplist clean under ThreadSanitizer |
 | | Differential test: 60k random ops vs `std::map`, forced across ~40 flushes and many SSTables |
 | | Torn-WAL recovery: every acknowledged write survives a truncated log tail |
 | | Block and SSTable CRCs reject single-bit corruption |
@@ -120,6 +170,12 @@ Filled in as milestones land. Every number here is reproducible with a command.
 | | Iterators survive concurrent compaction deleting the files they read |
 | Keyspace codec | Byte order proven to equal logical order for strings, signed ints and doubles |
 | | The quarter-query verified to touch exactly the matching keys - a range scan, not a filter |
+| Ontology | 21 transforms, each asserted pure: same chain, same input, same answer, every time |
+| | Transform ids pinned by test, because they are written into provenance records forever |
+| | Adding an entity type is a YAML edit - the loader rejects 14 classes of schema mistake at startup |
+| Connectors | CSV, REST/JSON and Postgres behind one `RowSource` interface, all three streaming |
+| | Re-ingesting an unchanged input is a verified no-op; a changed one never destroys the old batch |
+| | Every stored value replays from its recorded transform chain and raw cell - the day 11 test in miniature |
 | Entity resolution | *day 10* - F1 on a held-out labeled set |
 | Blocking | *day 8* - reduction ratio, pair completeness |
 | Lineage | *day 11* - round-trip verified for 100% of resolved properties |

@@ -1,0 +1,10 @@
+[
+  { "name": "AURORA BOREALIS", "imo": 9074729, "mmsi": 230123456, "callSign": "OJKL", "vesselTypeCode": 70, "grossTonnage": 24500 },
+  { "name": "Baltic Trader", "imo": 9321483, "mmsi": 230987654, "callSign": "ojmn", "vesselTypeCode": 70, "grossTonnage": 12800 },
+  { "name": "MAAS EXPRESS", "imo": 9345673, "mmsi": 244567890, "callSign": "PBQR", "vesselTypeCode": 80, "grossTonnage": 61200 },
+  { "name": "ELBE PIONEER", "imo": 9111113, "mmsi": 211345678, "callSign": "DHST", "vesselTypeCode": 70, "grossTonnage": 18900 },
+  { "name": "GOTA LINK", "imo": 9501239, "mmsi": 265432100, "callSign": "SAUV", "vesselTypeCode": 60, "grossTonnage": 34100 },
+  { "name": "MONROVIA STAR", "imo": 9700005, "mmsi": 636012345, "callSign": "A8WX", "vesselTypeCode": 80, "grossTonnage": 78400 },
+  { "name": "BAD CHECKSUM", "imo": 9074720, "mmsi": 353001234, "callSign": "3EYZ", "vesselTypeCode": 70, "grossTonnage": 9100 },
+  { "name": "NO SUCH FLAG", "imo": null, "mmsi": 999888777, "callSign": "", "vesselTypeCode": 1012, "grossTonnage": null }
+]

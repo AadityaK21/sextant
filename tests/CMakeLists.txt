@@ -2,7 +2,7 @@ include(GoogleTest)
 
 function(sextant_add_test name)
   add_executable(${name} ${ARGN})
-  target_link_libraries(${name} PRIVATE sextant_lsm GTest::gtest_main)
+  target_link_libraries(${name} PRIVATE sextant_lsm sextant_warnings GTest::gtest_main)
   target_include_directories(${name} PRIVATE
     ${CMAKE_SOURCE_DIR}/src/lsm
     ${CMAKE_SOURCE_DIR}/include)
@@ -28,7 +28,7 @@ sextant_add_test(test_db_diff       lsm/test_db_differential.cpp)
 # --- day 5: the keyspace codec ---
 function(sextant_add_codec_test name)
   add_executable(${name} ${ARGN})
-  target_link_libraries(${name} PRIVATE sextant_codec GTest::gtest_main)
+  target_link_libraries(${name} PRIVATE sextant_codec sextant_warnings GTest::gtest_main)
   target_include_directories(${name} PRIVATE
     ${CMAKE_SOURCE_DIR}/src/codec
     ${CMAKE_SOURCE_DIR}/src/lsm
@@ -40,3 +40,45 @@ sextant_add_codec_test(test_ulid      codec/test_ulid.cpp)
 sextant_add_codec_test(test_ordered   codec/test_ordered.cpp)
 sextant_add_codec_test(test_keyspace  codec/test_keyspace.cpp)
 sextant_add_codec_test(test_store     codec/test_store.cpp)
+
+# --- days 6-7: the ontology and the connectors ---
+#
+# These tests read the schema files and the committed data samples, and ctest
+# runs them from the build directory. Baking the source path in is more robust
+# than a relative path that only works when the build tree sits in one place -
+# and it means a failure says which file it could not find.
+function(sextant_add_ontology_test name)
+  add_executable(${name} ${ARGN})
+  target_link_libraries(${name} PRIVATE sextant_ontology sextant_warnings
+                                        GTest::gtest_main)
+  target_include_directories(${name} PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/ontology
+    ${CMAKE_SOURCE_DIR}/src/codec
+    ${CMAKE_SOURCE_DIR}/src/lsm
+    ${CMAKE_SOURCE_DIR}/include)
+  target_compile_definitions(${name} PRIVATE SEXTANT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 30)
+endfunction()
+
+function(sextant_add_connector_test name)
+  add_executable(${name} ${ARGN})
+  target_link_libraries(${name} PRIVATE sextant_connectors sextant_warnings
+                                        GTest::gtest_main)
+  target_include_directories(${name} PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/connectors
+    ${CMAKE_SOURCE_DIR}/src/ontology
+    ${CMAKE_SOURCE_DIR}/src/codec
+    ${CMAKE_SOURCE_DIR}/src/lsm
+    ${CMAKE_SOURCE_DIR}/include)
+  target_compile_definitions(${name} PRIVATE SEXTANT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 30)
+endfunction()
+
+sextant_add_ontology_test(test_value      ontology/test_value.cpp)
+sextant_add_ontology_test(test_transform  ontology/test_transform.cpp)
+sextant_add_ontology_test(test_schema     ontology/test_schema.cpp)
+sextant_add_ontology_test(test_mapping    ontology/test_mapping.cpp)
+
+sextant_add_connector_test(test_csv     connectors/test_csv.cpp)
+sextant_add_connector_test(test_json    connectors/test_json.cpp)
+sextant_add_connector_test(test_ingest  connectors/test_ingest.cpp)

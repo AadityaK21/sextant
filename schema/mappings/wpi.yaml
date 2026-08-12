@@ -14,6 +14,7 @@
 
 source:
   id: wpi
+  source_id: 1              # numeric and permanent - it is in every key on disk
   name: NGA World Port Index (Pub 150)
   connector: csv
   uri: data/snapshots/wpi/UpdatedPub150.csv
