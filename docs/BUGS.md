@@ -57,6 +57,44 @@ before the Windows CI job finds it for you.
 
 ---
 
+## Off by one bit, out by one byte          2026-08-12
+
+**Symptom.** Four ULID tests failed together, and the failures made no sense as
+a group: `StringRoundTrip`, `CrockfordDecodingIsForgiving`,
+`GeneratedIdsAreUnique` and `GenerationIsThreadSafe`. Uniqueness and thread
+safety have nothing to do with text formatting.
+
+**Root cause.** 128 bits does not divide evenly into 5-bit base32 symbols. 26
+symbols hold 130 bits, so the first symbol carries only **3** real bits and the
+remaining 25 carry 125. I wrote 2, leaving 126 bits spread across 25 symbols -
+which needs a 27th symbol to flush the remainder:
+
+```cpp
+std::string out(kTextSize, '0');            // 26 bytes
+out[pos++] = kEncoding[(bytes_[0] >> 6) & 0x03];   // 2 bits, should be 3
+...
+if (bits > 0) out[pos++] = ...;             // writes out[26]
+```
+
+`out[26]` is one past the end. The uniqueness and thread-safety failures were
+downstream: the overflow corrupted adjacent memory, so ids that were in fact
+distinct compared equal.
+
+**Fix.** Three bits in the first symbol, and an assertion that the encoder
+consumes exactly 128 bits and emits exactly 26 characters.
+
+**Lesson.** Two things. First, when several unrelated tests fail at once,
+suspect memory corruption rather than looking for a shared logical cause - the
+symptoms will not point at the bug. Second, bit-packing arithmetic deserves an
+assertion rather than trust: `assert(pos == kTextSize && bits == 0)` would have
+caught this the first time the encoder ran, instead of three tests later.
+
+Worth noting that a debug build catches this instantly and the release build
+happily wrote past the buffer, which is the same argument as the sanitiser job
+in CI.
+
+---
+
 ## 111 missing includes, invisible until CI ran          2026-08-09
 
 **Symptom.** Four of five CI jobs failed. macOS passed. ubuntu-latest, ASan and

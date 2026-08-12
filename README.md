@@ -23,7 +23,7 @@ C++20 · React · no storage dependencies
 | **Day 2** - SSTable build/read, flush to L0 | ✅ | 98 tests green |
 | **Day 3** - bloom filters, block cache, merging iterator | ✅ | 132 tests green |
 | **Day 4** - VersionSet/MANIFEST, leveled compaction | ✅ | 145 tests green |
-| Day 5 - keyspace codec | ⬜ | |
+| **Day 5** - keyspace codec, ULID, ordered encodings | ✅ | 209 tests green |
 | Days 6-7 - ontology, transforms, three connectors | ⬜ | |
 | Days 8-10 - entity resolution | ⬜ | |
 | Days 11-12 - lineage, query engine, HTTP API | ⬜ | |
@@ -111,13 +111,15 @@ Filled in as milestones land. Every number here is reproducible with a command.
 |---|---|
 | Storage engine | 1.5M batched writes/sec · 3.7M misses/sec · write amplification **1.20x** · [full benchmarks](docs/BENCH.md) |
 | | Recovery bounded by buffer size, not data size: 2,013 records replayed instead of 202,200 |
-| Correctness | 145 tests green on Linux, Windows and macOS · clean under ASan + UBSan · lock-free skiplist clean under ThreadSanitizer |
+| Correctness | 209 tests green on Linux, Windows and macOS · clean under ASan + UBSan · lock-free skiplist clean under ThreadSanitizer |
 | | Differential test: 60k random ops vs `std::map`, forced across ~40 flushes and many SSTables |
 | | Torn-WAL recovery: every acknowledged write survives a truncated log tail |
 | | Block and SSTable CRCs reject single-bit corruption |
 | | Bloom filter proven to have zero false negatives over 10k keys |
 | | Leveled compaction: read amplification stays bounded as data grows 10x |
 | | Iterators survive concurrent compaction deleting the files they read |
+| Keyspace codec | Byte order proven to equal logical order for strings, signed ints and doubles |
+| | The quarter-query verified to touch exactly the matching keys - a range scan, not a filter |
 | Entity resolution | *day 10* - F1 on a held-out labeled set |
 | Blocking | *day 8* - reduction ratio, pair completeness |
 | Lineage | *day 11* - round-trip verified for 100% of resolved properties |

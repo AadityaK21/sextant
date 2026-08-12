@@ -48,6 +48,7 @@ include(cmake/Dependencies.cmake)
 # Targets
 # ---------------------------------------------------------------------------
 add_subdirectory(src/lsm)
+add_subdirectory(src/codec)
 
 if(SEXTANT_BUILD_TESTS)
   enable_testing()
