@@ -1,0 +1,282 @@
+[
+ {
+  "name": "AURORA BOREA",
+  "imo": 0,
+  "mmsi": 230100000,
+  "callSign": "",
+  "shipType": 70
+ },
+ {
+  "name": "MV Baltic Trader",
+  "imo": 9000015,
+  "mmsi": 244100007,
+  "callSign": "bd1001",
+  "shipType": 80
+ },
+ {
+  "name": "M4AS EXPRESS",
+  "imo": 9000027,
+  "mmsi": 211100014,
+  "callSign": "cg1002",
+  "shipType": 60
+ },
+ {
+  "name": "ELBE PIONEER",
+  "imo": 9000039,
+  "mmsi": 265100022,
+  "callSign": "",
+  "shipType": 52
+ },
+ {
+  "name": "GOTA LINK",
+  "imo": 9000041,
+  "mmsi": 636100028,
+  "callSign": "em1004",
+  "shipType": 30
+ },
+ {
+  "name": "MV Monrovia Star",
+  "imo": 0,
+  "mmsi": 353100035,
+  "callSign": "fp1005",
+  "shipType": 70
+ },
+ {
+  "name": "AEGEAN WIND",
+  "imo": 9005194,
+  "mmsi": 232100042,
+  "callSign": "",
+  "shipType": 80
+ },
+ {
+  "name": "ATLANTIC DAWN",
+  "imo": 9000077,
+  "mmsi": 366100049,
+  "callSign": "hv1007",
+  "shipType": 60
+ },
+ {
+  "name": "PACIFIC HORI",
+  "imo": 9000089,
+  "mmsi": 563100056,
+  "callSign": "iy1008",
+  "shipType": 52
+ },
+ {
+  "name": "MV Coral Voyager",
+  "imo": 9000091,
+  "mmsi": 477100063,
+  "callSign": "",
+  "shipType": 30
+ },
+ {
+  "name": "IRON DUCHESS",
+  "imo": 0,
+  "mmsi": 249100071,
+  "callSign": "ke1010",
+  "shipType": 70
+ },
+ {
+  "name": "SILVER MERIDIAN",
+  "imo": 9000118,
+  "mmsi": 538100077,
+  "callSign": "lh1011",
+  "shipType": 80
+ },
+ {
+  "name": "CAPE FINISTE",
+  "imo": 9000120,
+  "mmsi": 230100084,
+  "callSign": "",
+  "shipType": 60
+ },
+ {
+  "name": "MV Gulf Sentinel",
+  "imo": 9000132,
+  "mmsi": 244100091,
+  "callSign": "nn1013",
+  "shipType": 52
+ },
+ {
+  "name": "4RCTIC RESOLVE",
+  "imo": 9000144,
+  "mmsi": 211100098,
+  "callSign": "oq1014",
+  "shipType": 30
+ },
+ {
+  "name": "SOUTHERN CROSS",
+  "imo": 0,
+  "mmsi": 265100105,
+  "callSign": "",
+  "shipType": 70
+ },
+ {
+  "name": "HANSEATIC BA",
+  "imo": 9000168,
+  "mmsi": 636100112,
+  "callSign": "qw1016",
+  "shipType": 80
+ },
+ {
+  "name": "MV Iberian Trader",
+  "imo": 9000170,
+  "mmsi": 353100120,
+  "callSign": "rz1017",
+  "shipType": 60
+ },
+ {
+  "name": "MEDITERRANEAN SKY",
+  "imo": 9005314,
+  "mmsi": 232100126,
+  "callSign": "",
+  "shipType": 52
+ },
+ {
+  "name": "AEGEAN WIND",
+  "imo": 9000194,
+  "mmsi": 366100133,
+  "callSign": "tf1019",
+  "shipType": 30
+ },
+ {
+  "name": "BOSPHORUS QU",
+  "imo": 0,
+  "mmsi": 563100140,
+  "callSign": "ui1020",
+  "shipType": 70
+ },
+ {
+  "name": "MV Caspian Gate",
+  "imo": 9000211,
+  "mmsi": 477100147,
+  "callSign": "",
+  "shipType": 80
+ },
+ {
+  "name": "D4NUBE RIVER",
+  "imo": 9000223,
+  "mmsi": 249100154,
+  "callSign": "wo1022",
+  "shipType": 60
+ },
+ {
+  "name": "EMERALD ISLE",
+  "imo": 9000235,
+  "mmsi": 538100161,
+  "callSign": "xr1023",
+  "shipType": 52
+ },
+ {
+  "name": "FJORD RUNNER",
+  "imo": 9000247,
+  "mmsi": 230100169,
+  "callSign": "",
+  "shipType": 30
+ },
+ {
+  "name": "MV Grand Banks",
+  "imo": 0,
+  "mmsi": 244100175,
+  "callSign": "zx1025",
+  "shipType": 70
+ },
+ {
+  "name": "HELLENIC SUN",
+  "imo": 9000261,
+  "mmsi": 211100182,
+  "callSign": "aa1026",
+  "shipType": 80
+ },
+ {
+  "name": "INDIAN OCEAN",
+  "imo": 9000273,
+  "mmsi": 265100189,
+  "callSign": "",
+  "shipType": 60
+ },
+ {
+  "name": "JADE HARMONY",
+  "imo": 9000285,
+  "mmsi": 636100196,
+  "callSign": "cg1028",
+  "shipType": 52
+ },
+ {
+  "name": "MV Kattegat Star",
+  "imo": 9000297,
+  "mmsi": 353100203,
+  "callSign": "dj1029",
+  "shipType": 30
+ },
+ {
+  "name": "ELBE PIONEER",
+  "imo": 9005039,
+  "mmsi": 232100210,
+  "callSign": "",
+  "shipType": 70
+ },
+ {
+  "name": "MEDITERRANEAN SKY",
+  "imo": 9000314,
+  "mmsi": 366100218,
+  "callSign": "fp1031",
+  "shipType": 80
+ },
+ {
+  "name": "NORTH CAPE",
+  "imo": 9000326,
+  "mmsi": 563100224,
+  "callSign": "gs1032",
+  "shipType": 60
+ },
+ {
+  "name": "MV Orion Trader",
+  "imo": 9000338,
+  "mmsi": 477100231,
+  "callSign": "",
+  "shipType": 52
+ },
+ {
+  "name": "P4NAMA EXPRESS",
+  "imo": 9000340,
+  "mmsi": 249100238,
+  "callSign": "iy1034",
+  "shipType": 30
+ },
+ {
+  "name": "QUANTUM LEAP",
+  "imo": 0,
+  "mmsi": 538100245,
+  "callSign": "jb1035",
+  "shipType": 70
+ },
+ {
+  "name": "RHINE CARRIE",
+  "imo": 9000364,
+  "mmsi": 230100252,
+  "callSign": "",
+  "shipType": 80
+ },
+ {
+  "name": "MV Suez Pioneer",
+  "imo": 9000376,
+  "mmsi": 244100259,
+  "callSign": "lh1037",
+  "shipType": 60
+ },
+ {
+  "name": "TH4MES SPIRIT",
+  "imo": 9000388,
+  "mmsi": 211100267,
+  "callSign": "mk1038",
+  "shipType": 52
+ },
+ {
+  "name": "URAL MOUNTAIN",
+  "imo": 9000390,
+  "mmsi": 265100273,
+  "callSign": "",
+  "shipType": 30
+ }
+]

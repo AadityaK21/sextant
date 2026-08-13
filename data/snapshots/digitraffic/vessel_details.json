@@ -1,10 +1,322 @@
 [
-  { "name": "AURORA BOREALIS", "imo": 9074729, "mmsi": 230123456, "callSign": "OJKL", "vesselTypeCode": 70, "grossTonnage": 24500 },
-  { "name": "Baltic Trader", "imo": 9321483, "mmsi": 230987654, "callSign": "ojmn", "vesselTypeCode": 70, "grossTonnage": 12800 },
-  { "name": "MAAS EXPRESS", "imo": 9345673, "mmsi": 244567890, "callSign": "PBQR", "vesselTypeCode": 80, "grossTonnage": 61200 },
-  { "name": "ELBE PIONEER", "imo": 9111113, "mmsi": 211345678, "callSign": "DHST", "vesselTypeCode": 70, "grossTonnage": 18900 },
-  { "name": "GOTA LINK", "imo": 9501239, "mmsi": 265432100, "callSign": "SAUV", "vesselTypeCode": 60, "grossTonnage": 34100 },
-  { "name": "MONROVIA STAR", "imo": 9700005, "mmsi": 636012345, "callSign": "A8WX", "vesselTypeCode": 80, "grossTonnage": 78400 },
-  { "name": "BAD CHECKSUM", "imo": 9074720, "mmsi": 353001234, "callSign": "3EYZ", "vesselTypeCode": 70, "grossTonnage": 9100 },
-  { "name": "NO SUCH FLAG", "imo": null, "mmsi": 999888777, "callSign": "", "vesselTypeCode": 1012, "grossTonnage": null }
+ {
+  "name": "AURORA BOREALIS",
+  "imo": 9000003,
+  "mmsi": 230100000,
+  "callSign": "AA1000",
+  "vesselTypeCode": 70,
+  "grossTonnage": 8000
+ },
+ {
+  "name": "BALTIC TRADER",
+  "imo": 9000015,
+  "mmsi": 244100007,
+  "callSign": "BD1001",
+  "vesselTypeCode": 80,
+  "grossTonnage": 9300
+ },
+ {
+  "name": "MAAS EXPRESS",
+  "imo": 9000027,
+  "mmsi": 211100014,
+  "callSign": "CG1002",
+  "vesselTypeCode": 60,
+  "grossTonnage": 10600
+ },
+ {
+  "name": "ELBE PIONEER",
+  "imo": 9000039,
+  "mmsi": 265100021,
+  "callSign": "DJ1003",
+  "vesselTypeCode": 52,
+  "grossTonnage": 11900
+ },
+ {
+  "name": "GOTA LINK",
+  "imo": 9000041,
+  "mmsi": 636100028,
+  "callSign": "EM1004",
+  "vesselTypeCode": 30,
+  "grossTonnage": 13200
+ },
+ {
+  "name": "MONROVIA STAR",
+  "imo": 9000053,
+  "mmsi": 353100035,
+  "callSign": "FP1005",
+  "vesselTypeCode": 70,
+  "grossTonnage": 14500
+ },
+ {
+  "name": "NORDIC SPIRIT",
+  "imo": 9000065,
+  "mmsi": 232100042,
+  "callSign": "GS1006",
+  "vesselTypeCode": 80,
+  "grossTonnage": 15800
+ },
+ {
+  "name": "ATLANTIC DAWN",
+  "imo": 9000077,
+  "mmsi": 366100049,
+  "callSign": "HV1007",
+  "vesselTypeCode": 60,
+  "grossTonnage": 17100
+ },
+ {
+  "name": "PACIFIC HORIZON",
+  "imo": 9000089,
+  "mmsi": 563100056,
+  "callSign": "IY1008",
+  "vesselTypeCode": 52,
+  "grossTonnage": 18400
+ },
+ {
+  "name": "CORAL VOYAGER",
+  "imo": 9000091,
+  "mmsi": 477100063,
+  "callSign": "JB1009",
+  "vesselTypeCode": 30,
+  "grossTonnage": 19700
+ },
+ {
+  "name": "IRON DUCHESS",
+  "imo": 9000106,
+  "mmsi": 249100070,
+  "callSign": "KE1010",
+  "vesselTypeCode": 70,
+  "grossTonnage": 21000
+ },
+ {
+  "name": "SILVER MERIDIAN",
+  "imo": 9000118,
+  "mmsi": 538100077,
+  "callSign": "LH1011",
+  "vesselTypeCode": 80,
+  "grossTonnage": 22300
+ },
+ {
+  "name": "CAPE FINISTERRE",
+  "imo": 9000120,
+  "mmsi": 230100084,
+  "callSign": "MK1012",
+  "vesselTypeCode": 60,
+  "grossTonnage": 23600
+ },
+ {
+  "name": "GULF SENTINEL",
+  "imo": 9000132,
+  "mmsi": 244100091,
+  "callSign": "NN1013",
+  "vesselTypeCode": 52,
+  "grossTonnage": 24900
+ },
+ {
+  "name": "ARCTIC RESOLVE",
+  "imo": 9000144,
+  "mmsi": 211100098,
+  "callSign": "OQ1014",
+  "vesselTypeCode": 30,
+  "grossTonnage": 26200
+ },
+ {
+  "name": "SOUTHERN CROSS",
+  "imo": 9000156,
+  "mmsi": 265100105,
+  "callSign": "PT1015",
+  "vesselTypeCode": 70,
+  "grossTonnage": 27500
+ },
+ {
+  "name": "HANSEATIC BAY",
+  "imo": 9000168,
+  "mmsi": 636100112,
+  "callSign": "QW1016",
+  "vesselTypeCode": 80,
+  "grossTonnage": 28800
+ },
+ {
+  "name": "IBERIAN TRADER",
+  "imo": 9000170,
+  "mmsi": 353100119,
+  "callSign": "RZ1017",
+  "vesselTypeCode": 60,
+  "grossTonnage": 30100
+ },
+ {
+  "name": "ADRIATIC PEARL",
+  "imo": 9000182,
+  "mmsi": 232100126,
+  "callSign": "SC1018",
+  "vesselTypeCode": 52,
+  "grossTonnage": 31400
+ },
+ {
+  "name": "AEGEAN WIND",
+  "imo": 9000194,
+  "mmsi": 366100133,
+  "callSign": "TF1019",
+  "vesselTypeCode": 30,
+  "grossTonnage": 32700
+ },
+ {
+  "name": "BOSPHORUS QUEEN",
+  "imo": 9000209,
+  "mmsi": 563100140,
+  "callSign": "UI1020",
+  "vesselTypeCode": 70,
+  "grossTonnage": 34000
+ },
+ {
+  "name": "CASPIAN GATE",
+  "imo": 9000211,
+  "mmsi": 477100147,
+  "callSign": "VL1021",
+  "vesselTypeCode": 80,
+  "grossTonnage": 35300
+ },
+ {
+  "name": "DANUBE RIVER",
+  "imo": 9000223,
+  "mmsi": 249100154,
+  "callSign": "WO1022",
+  "vesselTypeCode": 60,
+  "grossTonnage": 36600
+ },
+ {
+  "name": "EMERALD ISLE",
+  "imo": 9000235,
+  "mmsi": 538100161,
+  "callSign": "XR1023",
+  "vesselTypeCode": 52,
+  "grossTonnage": 37900
+ },
+ {
+  "name": "FJORD RUNNER",
+  "imo": 9000247,
+  "mmsi": 230100168,
+  "callSign": "YU1024",
+  "vesselTypeCode": 30,
+  "grossTonnage": 39200
+ },
+ {
+  "name": "GRAND BANKS",
+  "imo": 9000259,
+  "mmsi": 244100175,
+  "callSign": "ZX1025",
+  "vesselTypeCode": 70,
+  "grossTonnage": 40500
+ },
+ {
+  "name": "HELLENIC SUN",
+  "imo": 9000261,
+  "mmsi": 211100182,
+  "callSign": "AA1026",
+  "vesselTypeCode": 80,
+  "grossTonnage": 41800
+ },
+ {
+  "name": "INDIAN OCEAN",
+  "imo": 9000273,
+  "mmsi": 265100189,
+  "callSign": "BD1027",
+  "vesselTypeCode": 60,
+  "grossTonnage": 43100
+ },
+ {
+  "name": "JADE HARMONY",
+  "imo": 9000285,
+  "mmsi": 636100196,
+  "callSign": "CG1028",
+  "vesselTypeCode": 52,
+  "grossTonnage": 44400
+ },
+ {
+  "name": "KATTEGAT STAR",
+  "imo": 9000297,
+  "mmsi": 353100203,
+  "callSign": "DJ1029",
+  "vesselTypeCode": 30,
+  "grossTonnage": 45700
+ },
+ {
+  "name": "LOIRE VALLEY",
+  "imo": 9000302,
+  "mmsi": 232100210,
+  "callSign": "EM1030",
+  "vesselTypeCode": 70,
+  "grossTonnage": 47000
+ },
+ {
+  "name": "MEDITERRANEAN SKY",
+  "imo": 9000314,
+  "mmsi": 366100217,
+  "callSign": "FP1031",
+  "vesselTypeCode": 80,
+  "grossTonnage": 48300
+ },
+ {
+  "name": "NORTH CAPE",
+  "imo": 9000326,
+  "mmsi": 563100224,
+  "callSign": "GS1032",
+  "vesselTypeCode": 60,
+  "grossTonnage": 49600
+ },
+ {
+  "name": "ORION TRADER",
+  "imo": 9000338,
+  "mmsi": 477100231,
+  "callSign": "HV1033",
+  "vesselTypeCode": 52,
+  "grossTonnage": 50900
+ },
+ {
+  "name": "PANAMA EXPRESS",
+  "imo": 9000340,
+  "mmsi": 249100238,
+  "callSign": "IY1034",
+  "vesselTypeCode": 30,
+  "grossTonnage": 52200
+ },
+ {
+  "name": "QUANTUM LEAP",
+  "imo": 9000352,
+  "mmsi": 538100245,
+  "callSign": "JB1035",
+  "vesselTypeCode": 70,
+  "grossTonnage": 53500
+ },
+ {
+  "name": "RHINE CARRIER",
+  "imo": 9000364,
+  "mmsi": 230100252,
+  "callSign": "KE1036",
+  "vesselTypeCode": 80,
+  "grossTonnage": 54800
+ },
+ {
+  "name": "SUEZ PIONEER",
+  "imo": 9000376,
+  "mmsi": 244100259,
+  "callSign": "LH1037",
+  "vesselTypeCode": 60,
+  "grossTonnage": 56100
+ },
+ {
+  "name": "THAMES SPIRIT",
+  "imo": 9000388,
+  "mmsi": 211100266,
+  "callSign": "MK1038",
+  "vesselTypeCode": 52,
+  "grossTonnage": 57400
+ },
+ {
+  "name": "URAL MOUNTAIN",
+  "imo": 9000390,
+  "mmsi": 265100273,
+  "callSign": "NN1039",
+  "vesselTypeCode": 30,
+  "grossTonnage": 58700
+ }
 ]

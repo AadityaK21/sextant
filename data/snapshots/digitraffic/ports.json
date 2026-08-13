@@ -1,13 +1,362 @@
 [
-  { "locode": "FIHEL", "portName": "HELSINKI", "country": "FI" },
-  { "locode": "FIKTK", "portName": "KOTKA", "country": "FI" },
-  { "locode": "FITKU", "portName": "TURKU", "country": "FI" },
-  { "locode": "FIRAU", "portName": "RAUMA", "country": "FI" },
-  { "locode": "FIPOR", "portName": "PORI", "country": "FI" },
-  { "locode": "FIOUL", "portName": "OULU", "country": "FI" },
-  { "locode": "FIHKO", "portName": "HANKO", "country": "FI" },
-  { "locode": "NLRTM", "portName": "ROTTERDAM", "country": "NL" },
-  { "locode": "DEHAM", "portName": "HAMBURG", "country": "DE" },
-  { "locode": "SEGOT", "portName": "GOTEBORG", "country": "SE" },
-  { "locode": "XX", "portName": "UNKNOWN PORT", "country": "XX" }
+ {
+  "locode": "NLRTM",
+  "portName": "ROTTERDAM",
+  "country": "NL"
+ },
+ {
+  "locode": "BEANR",
+  "portName": "ANTWERPEN",
+  "country": "BE"
+ },
+ {
+  "locode": "DEHAM",
+  "portName": "HAMBURG",
+  "country": "DE"
+ },
+ {
+  "locode": "DEWVN",
+  "portName": "WILHELMSHAVEN",
+  "country": "DE"
+ },
+ {
+  "locode": "DERSK",
+  "portName": "ROSTOCK",
+  "country": "DE"
+ },
+ {
+  "locode": "FRMRS",
+  "portName": "MARSEILLE",
+  "country": "FR"
+ },
+ {
+  "locode": "FRNTE",
+  "portName": "NANTES",
+  "country": "FR"
+ },
+ {
+  "locode": "GBFXT",
+  "portName": "FELIXSTOWE",
+  "country": "GB"
+ },
+ {
+  "locode": "GBLON",
+  "portName": "LONDON",
+  "country": "GB"
+ },
+ {
+  "locode": "GBGSY",
+  "portName": "GRIMSBY",
+  "country": "GB"
+ },
+ {
+  "locode": "IEDUB",
+  "portName": "DUBLIN",
+  "country": "IE"
+ },
+ {
+  "locode": "ESBIO",
+  "portName": "BILBAO",
+  "country": "ES"
+ },
+ {
+  "locode": "ESBCN",
+  "portName": "BARCELONA",
+  "country": "ES"
+ },
+ {
+  "locode": "PTLIS",
+  "portName": "LISBOA",
+  "country": "PT"
+ },
+ {
+  "locode": "PTLEI",
+  "portName": "LEIXOES",
+  "country": "PT"
+ },
+ {
+  "locode": "ITSPE",
+  "portName": "LA SPEZIA",
+  "country": "IT"
+ },
+ {
+  "locode": "ITTRS",
+  "portName": "TRIESTE",
+  "country": "IT"
+ },
+ {
+  "locode": "ITNAP",
+  "portName": "NAPOLI",
+  "country": "IT"
+ },
+ {
+  "locode": "GRSKG",
+  "portName": "THESSALONIKI",
+  "country": "GR"
+ },
+ {
+  "locode": "TRIZM",
+  "portName": "IZMIR",
+  "country": "TR"
+ },
+ {
+  "locode": "ROCND",
+  "portName": "CONSTANTA",
+  "country": "RO"
+ },
+ {
+  "locode": "UAODS",
+  "portName": "ODESA",
+  "country": "UA"
+ },
+ {
+  "locode": "RULED",
+  "portName": "SANKT-PETERBURG",
+  "country": "RU"
+ },
+ {
+  "locode": "PLGDN",
+  "portName": "GDANSK",
+  "country": "PL"
+ },
+ {
+  "locode": "PLSZZ",
+  "portName": "SZCZECIN",
+  "country": "PL"
+ },
+ {
+  "locode": "LVRIX",
+  "portName": "RIGA",
+  "country": "LV"
+ },
+ {
+  "locode": "EETLL",
+  "portName": "TALLINN",
+  "country": "EE"
+ },
+ {
+  "locode": "FIKTK",
+  "portName": "KOTKA",
+  "country": "FI"
+ },
+ {
+  "locode": "FIRAU",
+  "portName": "RAUMA",
+  "country": "FI"
+ },
+ {
+  "locode": "FIOUL",
+  "portName": "OULU",
+  "country": "FI"
+ },
+ {
+  "locode": "FIKEM",
+  "portName": "KEMI",
+  "country": "FI"
+ },
+ {
+  "locode": "SEGOT",
+  "portName": "GOTEBORG",
+  "country": "SE"
+ },
+ {
+  "locode": "SEHEL",
+  "portName": "HELSINGBORG",
+  "country": "SE"
+ },
+ {
+  "locode": "NOBGO",
+  "portName": "BERGEN",
+  "country": "NO"
+ },
+ {
+  "locode": "NOTRD",
+  "portName": "TRONDHEIM",
+  "country": "NO"
+ },
+ {
+  "locode": "DKAAR",
+  "portName": "AARHUS",
+  "country": "DK"
+ },
+ {
+  "locode": "DKEBJ",
+  "portName": "ESBJERG",
+  "country": "DK"
+ },
+ {
+  "locode": "SGSIN",
+  "portName": "SINGAPORE",
+  "country": "SG"
+ },
+ {
+  "locode": "CNSHA",
+  "portName": "SHANGHAI",
+  "country": "CN"
+ },
+ {
+  "locode": "CNNGB",
+  "portName": "NINGBO",
+  "country": "CN"
+ },
+ {
+  "locode": "CNTSN",
+  "portName": "TIANJIN",
+  "country": "CN"
+ },
+ {
+  "locode": "KRPUS",
+  "portName": "BUSAN",
+  "country": "KR"
+ },
+ {
+  "locode": "JPTYO",
+  "portName": "TOKYO",
+  "country": "JP"
+ },
+ {
+  "locode": "JPUKB",
+  "portName": "KOBE",
+  "country": "JP"
+ },
+ {
+  "locode": "JPOSA",
+  "portName": "OSAKA",
+  "country": "JP"
+ },
+ {
+  "locode": "MYPKG",
+  "portName": "PORT KLANG",
+  "country": "MY"
+ },
+ {
+  "locode": "THLCH",
+  "portName": "LAEM CHABANG",
+  "country": "TH"
+ },
+ {
+  "locode": "VNSGN",
+  "portName": "HO CHI MINH CITY",
+  "country": "VN"
+ },
+ {
+  "locode": "IDJKT",
+  "portName": "JAKARTA",
+  "country": "ID"
+ },
+ {
+  "locode": "LKCMB",
+  "portName": "COLOMBO",
+  "country": "LK"
+ },
+ {
+  "locode": "INMAA",
+  "portName": "CHENNAI",
+  "country": "IN"
+ },
+ {
+  "locode": "AEJEA",
+  "portName": "JEBEL ALI",
+  "country": "AE"
+ },
+ {
+  "locode": "SAJED",
+  "portName": "JEDDAH",
+  "country": "SA"
+ },
+ {
+  "locode": "EGPSD",
+  "portName": "PORT SAID",
+  "country": "EG"
+ },
+ {
+  "locode": "ZADUR",
+  "portName": "DURBAN",
+  "country": "ZA"
+ },
+ {
+  "locode": "NGLOS",
+  "portName": "LAGOS",
+  "country": "NG"
+ },
+ {
+  "locode": "CIABJ",
+  "portName": "ABIDJAN",
+  "country": "CI"
+ },
+ {
+  "locode": "USLAX",
+  "portName": "LOS ANGELES",
+  "country": "US"
+ },
+ {
+  "locode": "USSAV",
+  "portName": "SAVANNAH",
+  "country": "US"
+ },
+ {
+  "locode": "USSEA",
+  "portName": "SEATTLE",
+  "country": "US"
+ },
+ {
+  "locode": "USORF",
+  "portName": "NORFOLK",
+  "country": "US"
+ },
+ {
+  "locode": "USMIA",
+  "portName": "MIAMI",
+  "country": "US"
+ },
+ {
+  "locode": "CAVAN",
+  "portName": "VANCOUVER",
+  "country": "CA"
+ },
+ {
+  "locode": "CAHAL",
+  "portName": "HALIFAX",
+  "country": "CA"
+ },
+ {
+  "locode": "BRRIO",
+  "portName": "RIO DE JANEIRO",
+  "country": "BR"
+ },
+ {
+  "locode": "CLVAP",
+  "portName": "VALPARAISO",
+  "country": "CL"
+ },
+ {
+  "locode": "COCTG",
+  "portName": "CARTAGENA",
+  "country": "CO"
+ },
+ {
+  "locode": "MXVER",
+  "portName": "VERACRUZ",
+  "country": "MX"
+ },
+ {
+  "locode": "PABLB",
+  "portName": "BALBOA",
+  "country": "PA"
+ },
+ {
+  "locode": "AUSYD",
+  "portName": "SYDNEY",
+  "country": "AU"
+ },
+ {
+  "locode": "AUBNE",
+  "portName": "BRISBANE",
+  "country": "AU"
+ },
+ {
+  "locode": "NZAKL",
+  "portName": "AUCKLAND",
+  "country": "NZ"
+ }
 ]

@@ -1,13 +1,156 @@
 World Port Index Number,Region Name,Main Port Name,Alternate Port Name,UN/LOCODE,Country Code,World Water Body,Harbor Size,Harbor Type,Latitude,Longitude
-14370,North Sea,ROTTERDAM,"Rotterdam Botlek; Europoort; Maasvlakte",NLRTM,NL,North Sea,Large,Coastal Natural,51.9167,4.4833
-14170,North Sea,HAMBURG,Freihafen Hamburg,DEHAM,DE,North Sea,Large,River Natural,53.5500,9.9667
-14290,North Sea,ANTWERP,"Antwerpen; Anvers",BEANR,BE,North Sea,Large,River Basin,51.2167,4.4167
-14710,English Channel,LE HAVRE,,FRLEH,FR,English Channel,Large,Coastal Breakwater,49.4833,0.1167
-26010,Baltic Sea,HELSINKI,Helsingfors,FIHEL,FI,Baltic Sea,Medium,Coastal Natural,60.1667,24.9667
-26050,Baltic Sea,KOTKA,,FIKTK,FI,Baltic Sea,Small,Coastal Natural,60.4667,26.9500
-25510,Baltic Sea,GOTEBORG,"Gothenburg; Goteborg Hamn",SEGOT,SE,Kattegat,Large,Coastal Natural,57.7000,11.9333
-55110,Singapore Strait,SINGAPORE,Port of Singapore,SGSIN,SG,Singapore Strait,Large,Coastal Natural,1.2644,103.8400
-49700,North Atlantic Ocean,NEW YORK,"New York and New Jersey",USNYC,US,North Atlantic Ocean,Large,River Natural,40.6667,-74.0333
-14375,North Sea,ROTTERDAM BOTLEK,,,NL,North Sea,Medium,River Basin,51.8833,4.2833
-26055,Baltic Sea,Rauma,,FIRAU,FI,Baltic Sea,Small,Coastal Natural,61.1333,21.5000
-14180,North Sea,Bremerhaven,,DEBRV,DE,North Sea,Large,River Natural,53.5500,8.5833
+10000,North Sea,ROTTERDAM,Rotterdam Botlek,NLRTM,NL,North Sea,Large,Coastal Natural,51.9080,4.5012
+10001,North Sea,ROTTERDAM BOTLEK,,,NL,North Sea,Medium,River Basin,51.9098,4.4012
+10002,North Sea,EUROPOORT,,,NL,North Sea,Medium,River Basin,51.8355,4.5492
+10010,Baltic Sea,AMSTERDAM,,NLAMS,NL,Baltic Sea,Medium,Coastal Natural,52.4043,4.9269
+10020,Mediterranean Sea,ANTWERPEN,Antwerpen Deurganck,BEANR,BE,Mediterranean Sea,Small,Coastal Natural,51.2098,4.4026
+10021,Mediterranean Sea,ANTWERPEN DEURGANCK,,,BE,Mediterranean Sea,Medium,River Basin,51.2827,4.3719
+10030,North Atlantic Ocean,ZEEBRUGGE,,BEZEE,BE,North Atlantic Ocean,Very Small,Coastal Natural,51.3162,3.2209
+10040,South China Sea,HAMBURG,Hamburg Waltershof,DEHAM,DE,South China Sea,Large,Coastal Natural,53.5353,9.9670
+10041,South China Sea,HAMBURG WALTERSHOF,,,DE,South China Sea,Medium,River Basin,53.5960,9.9515
+10050,Pacific Ocean,BREMERHAVEN,,DEBRV,DE,Pacific Ocean,Medium,Coastal Natural,53.5734,8.5947
+10060,Indian Ocean,WILHELMSHAVEN,,DEWVN,DE,Indian Ocean,Small,Coastal Natural,53.5330,8.1207
+10070,Caribbean Sea,KIEL,,DEKEL,DE,Caribbean Sea,Very Small,Coastal Natural,54.3424,10.1630
+10080,North Sea,ROSTOCK,,DERSK,DE,North Sea,Large,Coastal Natural,54.0796,12.1248
+10090,Baltic Sea,LE HAVRE,Le Havre Port 2000,,FR,Baltic Sea,Medium,Coastal Natural,49.4728,0.1128
+10091,Baltic Sea,LE HAVRE PORT 2000,,,FR,Baltic Sea,Medium,River Basin,49.5576,0.0919
+10100,Mediterranean Sea,MARSEILLE,,FRMRS,FR,Mediterranean Sea,Small,Coastal Natural,43.3265,5.3952
+10110,North Atlantic Ocean,DUNKERQUE,,FRDKK,FR,North Atlantic Ocean,Very Small,Coastal Natural,51.0511,2.3598
+10120,South China Sea,NANTES,,,FR,South China Sea,Large,Coastal Natural,47.2444,-1.5506
+10130,Pacific Ocean,BORDEAUX,,FRBOD,FR,Pacific Ocean,Medium,Coastal Natural,44.8242,-0.5829
+10140,Indian Ocean,FELIXSTOWE,,GBFXT,GB,Indian Ocean,Small,Coastal Natural,51.9529,1.3449
+10150,Caribbean Sea,SOUTHAMPTON,,GBSOU,GB,Caribbean Sea,Very Small,Coastal Natural,50.8780,-1.3952
+10160,North Sea,LONDON,London Gateway,,GB,North Sea,Large,Coastal Natural,51.4950,-0.1465
+10161,North Sea,LONDON GATEWAY,,,GB,North Sea,Medium,River Basin,51.5181,-0.0922
+10170,Baltic Sea,LIVERPOOL,,GBLIV,GB,Baltic Sea,Medium,Coastal Natural,53.4020,-2.9738
+10180,Mediterranean Sea,GRIMSBY,,GBGSY,GB,Mediterranean Sea,Small,Coastal Natural,53.5689,-0.0791
+10190,North Atlantic Ocean,IMMINGHAM,,,GB,North Atlantic Ocean,Very Small,Coastal Natural,53.6242,-0.1883
+10200,South China Sea,DUBLIN,,IEDUB,IE,South China Sea,Large,Coastal Natural,53.3275,-6.2034
+10210,Pacific Ocean,CORK,,,IE,Pacific Ocean,Medium,Coastal Natural,51.9179,-8.4540
+10220,Indian Ocean,BILBAO,,,ES,Indian Ocean,Small,Coastal Natural,43.2348,-2.9178
+10230,Caribbean Sea,VALENCIA,,ESVLC,ES,Caribbean Sea,Very Small,Coastal Natural,39.4344,-0.3421
+10240,North Sea,BARCELONA,,ESBCN,ES,North Sea,Large,Coastal Natural,41.3266,2.1442
+10250,Baltic Sea,ALGECIRAS,,ESALG,ES,Baltic Sea,Medium,Coastal Natural,36.1434,-5.4452
+10260,Mediterranean Sea,LISBOA,,,PT,Mediterranean Sea,Small,Coastal Natural,38.7370,-9.1528
+10270,North Atlantic Ocean,SINES,,PTSIN,PT,North Atlantic Ocean,Very Small,Coastal Natural,37.9601,-8.8722
+10280,South China Sea,LEIXOES,,PTLEI,PT,South China Sea,Large,Coastal Natural,41.1869,-8.6835
+10290,Pacific Ocean,GENOVA,,,IT,Pacific Ocean,Medium,Coastal Natural,44.4245,8.9045
+10300,Indian Ocean,LA SPEZIA,,ITSPE,IT,Indian Ocean,Small,Coastal Natural,44.1206,9.8314
+10310,Caribbean Sea,GIOIA TAURO,,ITGIT,IT,Caribbean Sea,Very Small,Coastal Natural,38.4328,15.9135
+10320,North Sea,TRIESTE,,,IT,North Sea,Large,Coastal Natural,45.6546,13.7610
+10330,Baltic Sea,LIVORNO,,,IT,Baltic Sea,Medium,Coastal Natural,43.5385,10.3040
+10340,Mediterranean Sea,NAPOLI,,ITNAP,IT,Mediterranean Sea,Small,Coastal Natural,40.8561,14.2668
+10350,North Atlantic Ocean,PIRAEUS,,,GR,North Atlantic Ocean,Very Small,Coastal Natural,37.9498,23.6553
+10360,South China Sea,THESSALONIKI,,GRSKG,GR,South China Sea,Large,Coastal Natural,40.6266,22.9095
+10370,Pacific Ocean,ISTANBUL,,,TR,Pacific Ocean,Medium,Coastal Natural,41.0176,28.9839
+10380,Indian Ocean,IZMIR,,TRIZM,TR,Indian Ocean,Small,Coastal Natural,38.4335,27.1536
+10390,Caribbean Sea,MERSIN,,TRMER,TR,Caribbean Sea,Very Small,Coastal Natural,36.8204,34.6447
+10400,North Sea,CONSTANTA,,,RO,North Sea,Large,Coastal Natural,44.1777,28.6237
+10410,Baltic Sea,VARNA,,BGVAR,BG,Baltic Sea,Medium,Coastal Natural,43.1923,27.9096
+10420,Mediterranean Sea,ODESA,,UAODS,UA,Mediterranean Sea,Small,Coastal Natural,46.5066,30.7105
+10430,North Atlantic Ocean,NOVOROSSIYSK,,RUNVS,RU,North Atlantic Ocean,Very Small,Coastal Natural,44.7132,37.7936
+10440,South China Sea,SANKT-PETERBURG,,RULED,RU,South China Sea,Large,Coastal Natural,59.9441,30.2845
+10450,Pacific Ocean,KALININGRAD,,RUKGD,RU,Pacific Ocean,Medium,Coastal Natural,54.6904,20.5198
+10460,Indian Ocean,GDANSK,,PLGDN,PL,Indian Ocean,Small,Coastal Natural,54.3493,18.6573
+10470,Caribbean Sea,GDYNIA,,,PL,Caribbean Sea,Very Small,Coastal Natural,54.5347,18.5568
+10480,North Sea,SZCZECIN,,PLSZZ,PL,North Sea,Large,Coastal Natural,53.4497,14.5615
+10490,Baltic Sea,KLAIPEDA,,LTKLJ,LT,Baltic Sea,Medium,Coastal Natural,55.7131,21.1147
+10500,Mediterranean Sea,RIGA,,,LV,Mediterranean Sea,Small,Coastal Natural,56.9757,24.0882
+10510,North Atlantic Ocean,VENTSPILS,,LVVNT,LV,North Atlantic Ocean,Very Small,Coastal Natural,57.3779,21.5768
+10520,South China Sea,TALLINN,,,EE,South China Sea,Large,Coastal Natural,59.4142,24.7600
+10530,Pacific Ocean,HELSINKI,,FIHEL,FI,Pacific Ocean,Medium,Coastal Natural,60.1686,24.9500
+10540,Indian Ocean,KOTKA,,FIKTK,FI,Indian Ocean,Small,Coastal Natural,60.4783,26.9233
+10550,Caribbean Sea,TURKU,,,FI,Caribbean Sea,Very Small,Coastal Natural,60.4406,22.2756
+10560,North Sea,RAUMA,,FIRAU,FI,North Sea,Large,Coastal Natural,61.1388,21.4946
+10570,Baltic Sea,PORI,,,FI,Baltic Sea,Medium,Coastal Natural,61.4862,21.7785
+10580,Mediterranean Sea,OULU,,FIOUL,FI,Mediterranean Sea,Small,Coastal Natural,65.0047,25.4754
+10590,North Atlantic Ocean,HANKO,,,FI,North Atlantic Ocean,Very Small,Coastal Natural,59.8494,22.9940
+10600,South China Sea,KEMI,,,FI,South China Sea,Large,Coastal Natural,65.7300,24.5404
+10610,Pacific Ocean,STOCKHOLM,,,SE,Pacific Ocean,Medium,Coastal Natural,59.3143,18.0821
+10620,Indian Ocean,GOTEBORG,,SEGOT,SE,Indian Ocean,Small,Coastal Natural,57.7156,11.9483
+10630,Caribbean Sea,MALMO,,SEMMA,SE,Caribbean Sea,Very Small,Coastal Natural,55.6102,13.0042
+10640,North Sea,HELSINGBORG,,SEHEL,SE,North Sea,Large,Coastal Natural,56.0714,12.6992
+10650,Baltic Sea,OSLO,,NOOSL,NO,Baltic Sea,Medium,Coastal Natural,59.9315,10.7608
+10660,Mediterranean Sea,BERGEN,,NOBGO,NO,Mediterranean Sea,Small,Coastal Natural,60.3648,5.3139
+10670,North Atlantic Ocean,STAVANGER,,NOSVG,NO,North Atlantic Ocean,Very Small,Coastal Natural,58.9667,5.7503
+10680,South China Sea,TRONDHEIM,,NOTRD,NO,South China Sea,Large,Coastal Natural,63.4522,10.3813
+10690,Pacific Ocean,KOBENHAVN,,DKCPH,DK,Pacific Ocean,Medium,Coastal Natural,55.7008,12.5655
+10700,Indian Ocean,AARHUS,,DKAAR,DK,Indian Ocean,Small,Coastal Natural,56.1578,10.2158
+10710,Caribbean Sea,AALBORG,,DKAAL,DK,Caribbean Sea,Very Small,Coastal Natural,57.0298,9.8981
+10720,North Sea,ESBJERG,,DKEBJ,DK,North Sea,Large,Coastal Natural,55.4615,8.4657
+10730,Baltic Sea,REYKJAVIK,,ISREY,IS,Baltic Sea,Medium,Coastal Natural,64.1571,-21.9451
+10740,Mediterranean Sea,SINGAPORE,Singapore Jurong,,SG,Mediterranean Sea,Small,Coastal Natural,1.2826,103.8727
+10741,Mediterranean Sea,SINGAPORE JURONG,,,SG,Mediterranean Sea,Medium,River Basin,1.3625,103.9541
+10750,North Atlantic Ocean,HONG KONG,,,HK,North Atlantic Ocean,Very Small,Coastal Natural,22.3271,114.1451
+10760,South China Sea,SHANGHAI,Shanghai Yangshan,CNSHA,CN,South China Sea,Large,Coastal Natural,31.2169,121.4664
+10761,South China Sea,SHANGHAI YANGSHAN,,,CN,South China Sea,Medium,River Basin,31.1429,121.5469
+10770,Pacific Ocean,SHENZHEN,,,CN,Pacific Ocean,Medium,Coastal Natural,22.5197,114.0366
+10780,Indian Ocean,NINGBO,,CNNGB,CN,Indian Ocean,Small,Coastal Natural,29.8949,121.5683
+10790,Caribbean Sea,QINGDAO,,CNTAO,CN,Caribbean Sea,Very Small,Coastal Natural,36.0749,120.3539
+10800,North Sea,TIANJIN,,CNTSN,CN,North Sea,Large,Coastal Natural,39.1374,117.1809
+10810,Baltic Sea,GUANGZHOU,,CNCAN,CN,Baltic Sea,Medium,Coastal Natural,23.1193,113.2684
+10820,Mediterranean Sea,BUSAN,,KRPUS,KR,Mediterranean Sea,Small,Coastal Natural,35.1679,129.0748
+10830,North Atlantic Ocean,INCHEON,,KRINC,KR,North Atlantic Ocean,Very Small,Coastal Natural,37.4481,126.6054
+10840,South China Sea,TOKYO,,JPTYO,JP,South China Sea,Large,Coastal Natural,35.6648,139.7351
+10850,Pacific Ocean,YOKOHAMA,,JPYOK,JP,Pacific Ocean,Medium,Coastal Natural,35.4605,139.6294
+10860,Indian Ocean,KOBE,,,JP,Indian Ocean,Small,Coastal Natural,34.6610,135.2096
+10870,Caribbean Sea,NAGOYA,,,JP,Caribbean Sea,Very Small,Coastal Natural,35.0768,136.8908
+10880,North Sea,OSAKA,,JPOSA,JP,North Sea,Large,Coastal Natural,34.6617,135.4052
+10890,Baltic Sea,KAOHSIUNG,,,TW,Baltic Sea,Medium,Coastal Natural,22.6321,120.2534
+10900,Mediterranean Sea,PORT KLANG,Port Klang Westport,,MY,Mediterranean Sea,Small,Coastal Natural,3.0222,101.3945
+10901,Mediterranean Sea,PORT KLANG WESTPORT,,,MY,Mediterranean Sea,Medium,River Basin,2.9132,101.4953
+10910,North Atlantic Ocean,TANJUNG PELEPAS,,MYTPP,MY,North Atlantic Ocean,Very Small,Coastal Natural,1.3803,103.5605
+10920,South China Sea,LAEM CHABANG,,THLCH,TH,South China Sea,Large,Coastal Natural,13.0769,100.8765
+10930,Pacific Ocean,BANGKOK,,THBKK,TH,Pacific Ocean,Medium,Coastal Natural,13.7104,100.5779
+10940,Indian Ocean,HO CHI MINH CITY,,VNSGN,VN,Indian Ocean,Small,Coastal Natural,10.7471,106.7173
+10950,Caribbean Sea,HAIPHONG,,VNHPH,VN,Caribbean Sea,Very Small,Coastal Natural,20.8613,106.6745
+10960,North Sea,JAKARTA,,,ID,North Sea,Large,Coastal Natural,-6.1137,106.8981
+10970,Baltic Sea,MANILA,,PHMNL,PH,Baltic Sea,Medium,Coastal Natural,14.5950,120.9774
+10980,Mediterranean Sea,COLOMBO,,LKCMB,LK,Mediterranean Sea,Small,Coastal Natural,6.9157,79.8282
+10990,North Atlantic Ocean,MUMBAI,,INBOM,IN,North Atlantic Ocean,Very Small,Coastal Natural,18.9316,72.8181
+11000,South China Sea,CHENNAI,,INMAA,IN,South China Sea,Large,Coastal Natural,13.0937,80.3073
+11010,Pacific Ocean,NHAVA SHEVA,,,IN,Pacific Ocean,Medium,Coastal Natural,18.9339,72.9338
+11020,Indian Ocean,JEBEL ALI,,AEJEA,AE,Indian Ocean,Small,Coastal Natural,25.0055,55.0814
+11030,Caribbean Sea,DUBAI,,AEDXB,AE,Caribbean Sea,Very Small,Coastal Natural,25.2967,55.2737
+11040,North Sea,JEDDAH,,SAJED,SA,North Sea,Large,Coastal Natural,21.4639,39.1991
+11050,Baltic Sea,SALALAH,,,OM,Baltic Sea,Medium,Coastal Natural,16.9554,54.0260
+11060,Mediterranean Sea,PORT SAID,,EGPSD,EG,Mediterranean Sea,Small,Coastal Natural,31.2341,32.3127
+11070,North Atlantic Ocean,ALEXANDRIA,,EGALY,EG,North Atlantic Ocean,Very Small,Coastal Natural,31.2219,29.8930
+11080,South China Sea,DURBAN,,,ZA,South China Sea,Large,Coastal Natural,-29.8933,31.0091
+11090,Pacific Ocean,CAPE TOWN,,ZACPT,ZA,Pacific Ocean,Medium,Coastal Natural,-33.9243,18.4306
+11100,Indian Ocean,LAGOS,,,NG,Indian Ocean,Small,Coastal Natural,6.4704,3.3809
+11110,Caribbean Sea,TEMA,,GHTEM,GH,Caribbean Sea,Very Small,Coastal Natural,5.6010,-0.0077
+11120,North Sea,ABIDJAN,,CIABJ,CI,North Sea,Large,Coastal Natural,5.3189,-3.9996
+11130,Baltic Sea,NEW YORK,New York and New Jersey,USNYC,US,Baltic Sea,Medium,Coastal Natural,40.7069,-73.9877
+11131,Baltic Sea,NEW YORK AND NEW JERSEY,,,US,Baltic Sea,Medium,River Basin,40.8168,-73.9269
+11140,Mediterranean Sea,LOS ANGELES,,USLAX,US,Mediterranean Sea,Small,Coastal Natural,33.7366,-118.2640
+11150,North Atlantic Ocean,LONG BEACH,Long Beach Pier T,USLGB,US,North Atlantic Ocean,Very Small,Coastal Natural,33.7251,-118.1824
+11151,North Atlantic Ocean,LONG BEACH PIER T,,,US,North Atlantic Ocean,Medium,River Basin,33.6544,-118.2185
+11160,South China Sea,SAVANNAH,,USSAV,US,South China Sea,Large,Coastal Natural,32.0803,-81.1147
+11170,Pacific Ocean,HOUSTON,,USHOU,US,Pacific Ocean,Medium,Coastal Natural,29.7853,-95.3768
+11180,Indian Ocean,SEATTLE,,USSEA,US,Indian Ocean,Small,Coastal Natural,47.5937,-122.3157
+11190,Caribbean Sea,OAKLAND,,USOAK,US,Caribbean Sea,Very Small,Coastal Natural,37.8227,-122.2934
+11200,North Sea,NORFOLK,,USORF,US,North Sea,Large,Coastal Natural,36.8707,-76.2999
+11210,Baltic Sea,CHARLESTON,,USCHS,US,Baltic Sea,Medium,Coastal Natural,32.8054,-79.9148
+11220,Mediterranean Sea,MIAMI,,USMIA,US,Mediterranean Sea,Small,Coastal Natural,25.7541,-80.1895
+11230,North Atlantic Ocean,BALTIMORE,,USBAL,US,North Atlantic Ocean,Very Small,Coastal Natural,39.2774,-76.6125
+11240,South China Sea,VANCOUVER,,,CA,South China Sea,Large,Coastal Natural,49.3005,-123.1008
+11250,Pacific Ocean,MONTREAL,,,CA,Pacific Ocean,Medium,Coastal Natural,45.4893,-73.5871
+11260,Indian Ocean,HALIFAX,,CAHAL,CA,Indian Ocean,Small,Coastal Natural,44.6459,-63.5553
+11270,Caribbean Sea,SANTOS,,BRSSZ,BR,Caribbean Sea,Very Small,Coastal Natural,-23.9547,-46.3181
+11280,North Sea,RIO DE JANEIRO,,BRRIO,BR,North Sea,Large,Coastal Natural,-22.9213,-43.1955
+11290,Baltic Sea,BUENOS AIRES,,ARBUE,AR,Baltic Sea,Medium,Coastal Natural,-34.5883,-58.3769
+11300,Mediterranean Sea,VALPARAISO,,CLVAP,CL,Mediterranean Sea,Small,Coastal Natural,-33.0420,-71.5956
+11310,North Atlantic Ocean,CALLAO,,PECLL,PE,North Atlantic Ocean,Very Small,Coastal Natural,-12.0300,-77.1389
+11320,South China Sea,CARTAGENA,,COCTG,CO,South China Sea,Large,Coastal Natural,10.3793,-75.5217
+11330,Pacific Ocean,MANZANILLO,,,MX,Pacific Ocean,Medium,Coastal Natural,19.0433,-104.3221
+11340,Indian Ocean,VERACRUZ,,MXVER,MX,Indian Ocean,Small,Coastal Natural,19.2146,-96.1580
+11350,Caribbean Sea,COLON,,PACLN,PA,Caribbean Sea,Very Small,Coastal Natural,9.3647,-79.9116
+11360,North Sea,BALBOA,,PABLB,PA,North Sea,Large,Coastal Natural,8.9400,-79.5489
+11370,Baltic Sea,KINGSTON,,JMKIN,JM,Baltic Sea,Medium,Coastal Natural,17.9447,-76.8105
+11380,Mediterranean Sea,SYDNEY,,AUSYD,AU,Mediterranean Sea,Small,Coastal Natural,-33.8706,151.2308
+11390,North Atlantic Ocean,MELBOURNE,,AUMEL,AU,North Atlantic Ocean,Very Small,Coastal Natural,-37.8249,144.9785
+11400,South China Sea,BRISBANE,,AUBNE,AU,South China Sea,Large,Coastal Natural,-27.4927,153.0463
+11410,Pacific Ocean,FREMANTLE,,AUFRE,AU,Pacific Ocean,Medium,Coastal Natural,-32.0471,115.7152
+11420,Indian Ocean,AUCKLAND,,NZAKL,NZ,Indian Ocean,Small,Coastal Natural,-36.8360,174.7373
+11430,Caribbean Sea,TAURANGA,,NZTRG,NZ,Caribbean Sea,Very Small,Coastal Natural,-37.6788,176.1948
