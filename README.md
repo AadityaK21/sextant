@@ -118,20 +118,23 @@ not a filter - it is a range scan over a big-endian timestamp suffix
 (see [ADR 0002](docs/adr/0002-big-endian-key-encoding.md)).
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│ web/       React - browse entities, links, lineage        │
-├──────────────────────────────────────────────────────────┤
-│ src/api/   HTTP + JSON                                    │
-│ src/query/ planner · index selection · traversal          │
-│ src/ontology/  declarative types and links                │
-│ src/resolve/   normalize → block → score → cluster → fuse │
-│ src/lineage/   provenance emitted at every fusion decision │
-│ src/connectors/  CSV · REST · Postgres                    │
-│ src/codec/     key encoding - the glue                    │
-├──────────────────────────────────────────────────────────┤
-│ src/lsm/   WAL · MemTable · SSTable · Compaction          │
-└──────────────────────────────────────────────────────────┘
+   web/            React - browse entities, links, lineage      NOT BUILT (days 13-14)
+   src/api/        HTTP + JSON                                  NOT BUILT (day 12)
+   src/query/      planner · index selection · traversal        NOT BUILT (day 12)
+   src/lineage/    provenance at every fusion decision          NOT BUILT (day 11)
+   src/resolve/    normalize → block → score → cluster → fuse   NOT BUILT (days 8-10)
+  ─────────────────────────────────────────────────────────────────────────────────
+   src/cli/        ingest · stats · lineage · schema            built
+   src/connectors/ CSV · REST/JSON · Postgres                   built
+   src/ontology/   declarative types, links and transforms      built
+   src/codec/      key encoding - the glue                      built
+   src/lsm/        WAL · MemTable · SSTable · Compaction        built
 ```
+
+**The directories above the line do not exist yet.** They are the plan, not the
+code, and this diagram says so rather than letting the architecture imply a
+completeness the repository does not have. `git log` and the status table are
+the honest account of what is here; everything else is a design document.
 
 Full design: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -157,9 +160,24 @@ All free, all open, all genuinely messy - the duplication is real, not seeded.
 
 Filled in as milestones land. Every number here is reproducible with a command.
 
+**Read the conditions before the numbers.** All storage figures below come from
+one command - `./build/bench/lsm_bench 200000 100` - on **one machine**: a Linux
+container, GCC 11.4, 200,000 entries, 100-byte values, 4 MB write buffer,
+1,000 keys per batch, `sync=false`. Change any of those and the numbers move,
+sometimes by an order of magnitude. [`docs/BENCH.md`](docs/BENCH.md) has the
+full table including a second platform, and says which differences are the
+engine and which are the environment.
+
+The most important caveat: **`sync=false` is not a durability claim.** With
+`fsync` on every write the same engine does 655 ops/sec in that container,
+because an fsync is a device round-trip and no amount of CPU work touches it.
+That number is in `BENCH.md` too, and it is the one to quote if anyone asks
+what the engine does when durability is actually required.
+
 | | |
 |---|---|
-| Storage engine | 1.5M batched writes/sec · 3.7M misses/sec · write amplification **1.20x** · [full benchmarks](docs/BENCH.md) |
+| Storage engine | 1.53M batched writes/sec · 494k random writes/sec · 3.7M misses/sec · write amplification **1.20x** |
+| | 655 writes/sec with `sync=true` - the fsync floor, quoted so the batched number is not read as a durability figure |
 | | Recovery bounded by buffer size, not data size: 2,013 records replayed instead of 202,200 |
 | Correctness | 314 tests green on Linux, Windows and macOS · clean under ASan + UBSan · lock-free skiplist clean under ThreadSanitizer |
 | | Differential test: 60k random ops vs `std::map`, forced across ~40 flushes and many SSTables |

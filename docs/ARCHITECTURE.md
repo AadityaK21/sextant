@@ -654,6 +654,12 @@ State: TanStack Query. Styling: Tailwind. Don't spend design time here.
 
 ## 12. Repository layout
 
+> **This section is the target layout, not the current one.** Directories
+> marked `[planned]` do not exist in the repository yet - see the status table
+> in the README for what is actually built. A design document that reads as a
+> description of existing code is a document that will eventually mislead
+> somebody, including you.
+
 ```
 sextant/
 ├── CMakeLists.txt
@@ -666,15 +672,15 @@ sextant/
 │   │   ├── bloom.{h,cpp}  block_cache.{h,cpp}  comparator.h
 │   │   ├── version_set.{h,cpp}  compaction.{h,cpp}
 │   │   └── db.{h,cpp}  iterator.{h,cpp}  write_batch.{h,cpp}
-│   ├── codec/                   # key encoding, varint, big-endian, ULID
-│   ├── ontology/                # schema loader, type registry, validation
-│   ├── connectors/              # csv_source, http_source, postgres_source
-│   ├── transform/               # registry of named pure functions
-│   ├── resolve/                 # normalize, blocking, scorer, clusterer, fuser
-│   ├── lineage/                 # provenance writer / reader
-│   ├── query/                   # planner, executor, index selection
-│   ├── api/                     # cpp-httplib routes + JSON serialization
-│   └── cli/                     # sextant ingest | resolve | query | bench | serve
+│   ├── codec/                   # key encoding, varint, big-endian, ULID, hash
+│   ├── ontology/                # schema loader, type registry, transforms, mapping
+│   ├── connectors/              # csv, json_source, postgres, ingest
+│   ├── resolve/                 # [planned] normalize, blocking, scorer, clusterer, fuser
+│   ├── lineage/                 # [planned] provenance writer / reader
+│   ├── query/                   # [planned] planner, executor, index selection
+│   ├── api/                     # [planned] cpp-httplib routes + JSON serialization
+│   └── cli/                     # sextant ingest | stats | lineage | schema
+│                                #   (resolve | query | serve are [planned])
 ├── tests/
 ├── bench/
 ├── schema/
