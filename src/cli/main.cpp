@@ -25,9 +25,11 @@
 #include <windows.h>
 #endif
 
+#include "blocking.h"
 #include "bundle.h"
 #include "csv.h"
 #include "env.h"
+#include "golden.h"
 #include "ingest.h"
 #include "json_source.h"
 #include "postgres.h"
@@ -42,6 +44,7 @@ namespace onto = sextant::ontology;
 namespace conn = sextant::connectors;
 namespace codec = sextant::codec;
 namespace lsm = sextant::lsm;
+namespace resolve = sextant::resolve;
 
 using lsm::Status;
 
@@ -100,6 +103,10 @@ usage:
 
   sextant stats   [--db DIR] [--schema DIR]
       Record counts per source, and the batches behind them.
+
+  sextant block   [--db DIR] [--schema DIR] [--eval DIR] [--max-block N]
+      Build the blocking index and report reduction ratio and pair
+      completeness against the golden sets in eval/.
 
   sextant lineage --source ID --batch N --row N [--db DIR]
       Print the verbatim source row a lineage reference points at.
@@ -388,6 +395,124 @@ int CmdStats(const Args& args) {
   return 0;
 }
 
+// --- block ------------------------------------------------------------------
+
+int CmdBlock(const Args& args) {
+  onto::SchemaBundle bundle;
+  Status s = onto::SchemaBundle::LoadFromDir(args.Get("schema", "schema"), &bundle);
+  if (!s.ok()) {
+    std::fprintf(stderr, "schema: %s\n", s.ToString().c_str());
+    return 1;
+  }
+  std::unique_ptr<codec::Store> store;
+  s = OpenStore(args, &store);
+  if (!s.ok()) {
+    std::fprintf(stderr, "store: %s\n", s.ToString().c_str());
+    return 1;
+  }
+
+  resolve::ResolverProperties props;
+  s = resolve::ResolverProperties::Resolve(bundle.ontology(), &props);
+  if (!s.ok()) {
+    std::fprintf(stderr, "resolver: %s\n", s.ToString().c_str());
+    return 1;
+  }
+
+  resolve::Blocker blocker(store.get(), &bundle, &props);
+  resolve::BlockingReport report;
+
+  s = blocker.IndexAll(&report);
+  if (!s.ok()) {
+    std::fprintf(stderr, "index: %s\n", s.ToString().c_str());
+    return 1;
+  }
+
+  resolve::Blocker::Options options;
+  options.max_block_size = static_cast<size_t>(args.GetU64("max-block", 200));
+
+  std::vector<resolve::CandidatePairRef> pairs;
+  s = blocker.GenerateCandidates(options, &pairs, &report);
+  if (!s.ok()) {
+    std::fprintf(stderr, "candidates: %s\n", s.ToString().c_str());
+    return 1;
+  }
+
+  std::printf("blocking\n");
+  std::printf("  %llu records indexed, %llu keys written\n",
+              static_cast<unsigned long long>(report.records_indexed),
+              static_cast<unsigned long long>(report.keys_written));
+  std::printf("  %llu blocks, largest %llu, %llu purged over %zu\n",
+              static_cast<unsigned long long>(report.blocks),
+              static_cast<unsigned long long>(report.largest_block),
+              static_cast<unsigned long long>(report.purged_blocks),
+              options.max_block_size);
+  std::printf("  %llu candidate pairs out of %llu possible\n",
+              static_cast<unsigned long long>(report.candidate_pairs),
+              static_cast<unsigned long long>(report.possible_pairs));
+  std::printf("  reduction ratio    %.5f\n", report.reduction_ratio);
+
+  // Both golden sets, if they are there. A missing one is not an error - the
+  // blocking itself does not need labels, and production would not have any.
+  const std::string eval_dir = args.Get("eval", "eval");
+  bool measured = false;
+  for (const char* file : {"golden_ports.csv", "golden_vessels.csv"}) {
+    resolve::GoldenSet golden;
+    const std::string path = eval_dir + "/" + file;
+    const Status gs = resolve::GoldenSet::LoadFromFile(path, bundle, &golden);
+    if (!gs.ok()) {
+      std::fprintf(stderr, "  %s: %s\n", file, gs.ToString().c_str());
+      continue;
+    }
+    resolve::BlockingReport measured_report = report;
+    resolve::MeasureAgainstGolden(pairs, golden, options.max_missed_reported,
+                                  &measured_report);
+    measured = true;
+
+    std::printf("\n  %s: %llu labeled pairs, %llu matches\n", file,
+                static_cast<unsigned long long>(golden.pairs().size()),
+                static_cast<unsigned long long>(golden.match_count()));
+    std::printf("  pair completeness  %.4f  (%llu of %llu true pairs blocked"
+                " together)\n",
+                measured_report.pair_completeness,
+                static_cast<unsigned long long>(
+                    measured_report.golden_matches_covered),
+                static_cast<unsigned long long>(measured_report.golden_matches));
+
+    std::printf("\n  %-16s %10s %10s %8s\n", "key", "candidates", "true pairs",
+                "unique");
+    for (const auto& [key, count] : measured_report.pairs_by_key) {
+      const auto matched = measured_report.matches_by_key.find(key);
+      const auto unique = measured_report.unique_matches_by_key.find(key);
+      std::printf("  %-16s %10llu %10llu %8llu\n", key.c_str(),
+                  static_cast<unsigned long long>(count),
+                  static_cast<unsigned long long>(
+                      matched == measured_report.matches_by_key.end()
+                          ? 0
+                          : matched->second),
+                  static_cast<unsigned long long>(
+                      unique == measured_report.unique_matches_by_key.end()
+                          ? 0
+                          : unique->second));
+    }
+
+    if (!measured_report.missed.empty()) {
+      // The recall nothing downstream can recover. Worth printing rather than
+      // only counting: five of these usually name the key that is missing.
+      std::printf("\n  true pairs no key produced:\n");
+      for (const auto& [a, b] : measured_report.missed) {
+        std::printf("    %s  <->  %s\n", a.c_str(), b.c_str());
+      }
+    }
+  }
+  if (!measured) {
+    std::fprintf(stderr,
+                 "\n  no golden set found under %s\n"
+                 "  run `python3 eval/make_corpus.py` to build one\n",
+                 eval_dir.c_str());
+  }
+  return 0;
+}
+
 // --- lineage ----------------------------------------------------------------
 
 int CmdLineage(const Args& args) {
@@ -448,6 +573,7 @@ int main(int argc, char** argv) {
   if (args.command == "schema") return CmdSchema(args);
   if (args.command == "ingest") return CmdIngest(args);
   if (args.command == "stats") return CmdStats(args);
+  if (args.command == "block") return CmdBlock(args);
   if (args.command == "lineage") return CmdLineage(args);
 
   std::fprintf(stderr, "unknown command \"%s\"\n\n", args.command.c_str());
