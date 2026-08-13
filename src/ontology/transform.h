@@ -136,6 +136,12 @@ class TransformRegistry {
   std::unordered_map<TransformId, size_t> by_id_;
 };
 
+// Fold Latin-1 and Latin Extended-A accents to ASCII. Exposed because entity
+// resolution needs exactly the same folding the ingest transform applies: if
+// normalization folded differently from `strip_diacritics`, two records would
+// be compared under one set of rules and stored under another.
+std::string FoldDiacritics(const std::string& text);
+
 // Exposed for testing: the MMSI Maritime Identification Digit table. Returns an
 // empty string for an unassigned MID.
 std::string MidToCountryCode(int mid);

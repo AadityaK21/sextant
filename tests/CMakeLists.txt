@@ -82,3 +82,23 @@ sextant_add_ontology_test(test_mapping    ontology/test_mapping.cpp)
 sextant_add_connector_test(test_csv     connectors/test_csv.cpp)
 sextant_add_connector_test(test_json    connectors/test_json.cpp)
 sextant_add_connector_test(test_ingest  connectors/test_ingest.cpp)
+
+# --- day 8: normalization and blocking ---
+function(sextant_add_resolve_test name)
+  add_executable(${name} ${ARGN})
+  target_link_libraries(${name} PRIVATE sextant_resolve sextant_warnings
+                                        GTest::gtest_main)
+  target_include_directories(${name} PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/resolve
+    ${CMAKE_SOURCE_DIR}/src/connectors
+    ${CMAKE_SOURCE_DIR}/src/ontology
+    ${CMAKE_SOURCE_DIR}/src/codec
+    ${CMAKE_SOURCE_DIR}/src/lsm
+    ${CMAKE_SOURCE_DIR}/include)
+  target_compile_definitions(${name} PRIVATE SEXTANT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 30)
+endfunction()
+
+sextant_add_resolve_test(test_normalize resolve/test_normalize.cpp)
+sextant_add_resolve_test(test_geohash   resolve/test_geohash.cpp)
+sextant_add_resolve_test(test_blocking  resolve/test_blocking.cpp)

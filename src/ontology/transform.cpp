@@ -566,6 +566,10 @@ TValue DdmmLonFn(const TValue& in, TransformContext& ctx) {
 
 }  // namespace
 
+std::string FoldDiacritics(const std::string& text) {
+  return StripDiacriticsStr(text);
+}
+
 // --- IMO check digit --------------------------------------------------------
 
 bool ImoChecksumValid(const std::string& digits) {
