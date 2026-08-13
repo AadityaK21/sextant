@@ -31,10 +31,10 @@ endpoints:
     path: /api/port-call/v1/ports
   - id: vessel_details
     path: /api/port-call/v1/vessel-details
-  - id: ais_vessels
-    path: /api/ais/v1/vessels
-  - id: ais_locations
-    path: /api/ais/v1/locations
+  # The AIS endpoints live in schema/mappings/digitraffic_ais.yaml as their own
+  # source. See the note at the top of that file: they key vessels on MMSI too,
+  # and a shared source_id would make the two feeds overwrite each other in the
+  # SRCREC keyspace.
 
 mappings:
   - target_type: Port

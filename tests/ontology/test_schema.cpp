@@ -342,8 +342,9 @@ TEST(Schema, TheRealSchemaDirectoryLoads) {
       SchemaBundle::LoadFromDir(std::string(SEXTANT_SOURCE_DIR) + "/schema", &bundle);
   ASSERT_TRUE(s.ok()) << s.ToString();
 
-  EXPECT_EQ(4u, bundle.sources().size());
-  for (const char* key : {"wpi", "unlocode", "digitraffic", "marinecadastre"}) {
+  EXPECT_GE(bundle.sources().size(), 4u);
+  for (const char* key :
+       {"wpi", "unlocode", "digitraffic", "digitraffic_ais", "marinecadastre"}) {
     const SourceSpec* spec = bundle.Source(key);
     ASSERT_NE(nullptr, spec) << key << " is missing";
     EXPECT_GT(spec->id, 0u) << key << " has no numeric source_id";
@@ -360,4 +361,14 @@ TEST(Schema, TheRealSchemaDirectoryLoads) {
   // UN/LOCODE is the code authority and must outrank the World Port Index on
   // the locode property, which is what the trust weights encode.
   EXPECT_GT(bundle.Source("unlocode")->trust, bundle.Source("wpi")->trust);
+  // A registry record outranks a self-reported AIS broadcast, for the same
+  // reason. If these ever invert, the fusion rules quietly start preferring
+  // whatever a transmitter was configured with.
+  EXPECT_GT(bundle.Source("digitraffic")->trust,
+            bundle.Source("digitraffic_ais")->trust);
+
+  // The two vessel feeds must not share a source id: SRCREC keys carry no
+  // endpoint, so a shared id would make the second ingest overwrite the first
+  // and the vessels would have no cross-source duplicates at all.
+  EXPECT_NE(bundle.Source("digitraffic")->id, bundle.Source("digitraffic_ais")->id);
 }

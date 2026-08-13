@@ -1,0 +1,63 @@
+# Fintraffic Digitraffic AIS - the second vessel source.
+#
+# WHY THIS IS A SEPARATE SOURCE AND NOT ANOTHER ENDPOINT OF digitraffic.yaml
+#
+# Two reasons, and the first is a correctness one.
+#
+# SRCREC keys are (source_id, natural_key_hash) with no endpoint in them. The
+# port-call feed and the AIS feed both key vessels on MMSI, so sharing a
+# source_id would mean the second ingest silently overwrote the first - and the
+# vessels would end up with no cross-source duplicates at all, which is the
+# opposite of what this source exists to provide.
+#
+# The second reason is trust. These are genuinely different kinds of statement:
+#
+#   port-call vessel-details  a REGISTRY record. Someone typed the name into a
+#                             port authority system, and the IMO is checked.
+#   ais vessels               a BROADCAST. Whatever the transmitter is
+#                             configured to send, which is frequently
+#                             truncated to fit a field, misspelled, or missing
+#                             the IMO entirely.
+#
+# A single trust number per source cannot express that if both feeds are one
+# source. Split, the registry outranks the broadcast, which is what the
+# most_trusted fusion rule needs to know.
+#
+# THE MESSINESS THIS SOURCE CONTRIBUTES, which is the point of including it:
+#   * names truncated mid-word by a fixed-width transmitter field
+#   * type prefixes the registry does not use - "MV Baltic Trader"
+#   * single-character transcription slips
+#   * roughly one in five broadcasting no IMO at all, which forces the resolver
+#     onto MMSI and name rather than the identifier that actually proves things
+
+source:
+  id: digitraffic_ais
+  source_id: 5
+  name: Fintraffic Digitraffic (AIS vessel metadata)
+  connector: http
+  base_url: https://meri.digitraffic.fi
+  headers:
+    Digitraffic-User: "sextant/0.1"
+  snapshot_dir: data/snapshots/digitraffic
+  natural_key: ["mmsi"]
+  # Below the port-call feed's 0.85 on purpose. AIS static data is
+  # self-reported by the vessel and is not validated by anyone.
+  trust: 0.55
+
+endpoints:
+  - id: ais_vessels
+    path: /api/ais/v1/vessels
+
+mappings:
+  - target_type: Vessel
+    from_endpoint: ais_vessels
+    natural_key: ["mmsi"]
+    properties:
+      name:      { from: "name",     transform: [trim, collapse_ws, null_if_blank] }
+      # A broadcast IMO of 0 means "not configured", which validate_imo rejects
+      # with a reason rather than storing as a number.
+      imo:       { from: "imo",      transform: [to_string, validate_imo] }
+      mmsi:      { from: "mmsi",     transform: [to_string] }
+      call_sign: { from: "callSign", transform: [trim, upper, null_if_blank] }
+      ship_type: { from: "shipType", transform: [to_int, normalize_ship_type] }
+      flag:      { from: "mmsi",     transform: [to_string, mid_to_country] }
