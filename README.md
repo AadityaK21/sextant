@@ -25,7 +25,8 @@ C++20 · React · no storage dependencies
 | **Day 4** - VersionSet/MANIFEST, leveled compaction | ✅ | 145 tests green |
 | **Day 5** - keyspace codec, ULID, ordered encodings | ✅ | 209 tests green |
 | **Days 6-7** - ontology, transforms, three connectors | ✅ | 314 tests green |
-| Days 8-10 - entity resolution | ⬜ | |
+| **Day 8** - normalization, blocking, RR/PC | ✅ | 350 tests green |
+| Days 9-10 - scoring, clustering, fusion | ⬜ | |
 | Days 11-12 - lineage, query engine, HTTP API | ⬜ | |
 | Days 13-14 - React frontend | ⬜ | |
 
@@ -62,7 +63,9 @@ with no network and no downloads.
 ./build/src/cli/sextant ingest --source wpi         # NGA World Port Index (CSV)
 ./build/src/cli/sextant ingest --source unlocode    # UN/LOCODE (CSV)
 ./build/src/cli/sextant ingest --source digitraffic # Digitraffic (REST/JSON)
+./build/src/cli/sextant ingest --source digitraffic_ais
 ./build/src/cli/sextant stats
+./build/src/cli/sextant block                       # blocking + RR/PC report
 ```
 
 On Windows, MSVC is a multi-config generator, so the binary lands one directory
@@ -122,9 +125,10 @@ not a filter - it is a range scan over a big-endian timestamp suffix
    src/api/        HTTP + JSON                                  NOT BUILT (day 12)
    src/query/      planner · index selection · traversal        NOT BUILT (day 12)
    src/lineage/    provenance at every fusion decision          NOT BUILT (day 11)
-   src/resolve/    normalize → block → score → cluster → fuse   NOT BUILT (days 8-10)
   ─────────────────────────────────────────────────────────────────────────────────
-   src/cli/        ingest · stats · lineage · schema            built
+   src/resolve/    normalize · block          built
+                   score · cluster · fuse     NOT BUILT (days 9-10)
+   src/cli/        ingest · stats · block · lineage · schema    built
    src/connectors/ CSV · REST/JSON · Postgres                   built
    src/ontology/   declarative types, links and transforms      built
    src/codec/      key encoding - the glue                      built
@@ -194,8 +198,9 @@ what the engine does when durability is actually required.
 | Connectors | CSV, REST/JSON and Postgres behind one `RowSource` interface, all three streaming |
 | | Re-ingesting an unchanged input is a verified no-op; a changed one never destroys the old batch |
 | | Every stored value replays from its recorded transform chain and raw cell - the day 11 test in miniature |
+| Blocking | Reduction ratio **0.993**, pair completeness **0.997** on 1,370 labeled port pairs, **1.000** on 272 vessel pairs · [methodology](docs/ER.md) |
+| | Per-key attribution measured, and it found one of the five keys contributing **zero** unique recall - written up rather than quietly dropped |
 | Entity resolution | *day 10* - F1 on a held-out labeled set |
-| Blocking | *day 8* - reduction ratio, pair completeness |
 | Lineage | *day 11* - round-trip verified for 100% of resolved properties |
 
 ### The result that matters most
@@ -232,6 +237,7 @@ Stated up front, because knowing what you didn't build is part of the design.
 | [`docs/EXECUTION_PLAN.md`](docs/EXECUTION_PLAN.md) | Day-by-day build order, cut lines, risk register |
 | [`docs/INTERVIEW_PREP.md`](docs/INTERVIEW_PREP.md) | Every design decision, the alternative rejected, and the cost |
 | [`docs/BENCH.md`](docs/BENCH.md) | Benchmarks and what they mean |
+| [`docs/ER.md`](docs/ER.md) | Entity resolution: golden-set methodology, blocking results, what the numbers do and do not prove |
 | [`docs/BUGS.md`](docs/BUGS.md) | Bug log |
 | [`docs/adr/`](docs/adr/) | Architecture decision records |
 

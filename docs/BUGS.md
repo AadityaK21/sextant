@@ -377,6 +377,80 @@ explicit rule and a sentence explaining it.
 
 ---
 
+## Ten hulls with one IMO, and a golden set that believed it          2026-08-13
+
+**Symptom.** The generated vessel corpus produced 995 labeled pairs of which 760
+were matches. A three-to-one ratio of matches to non-matches is not what a
+record-linkage set looks like, and it was the ratio - not any test - that gave
+it away.
+
+**Root cause.** The IMO was built as `f"9{index + 100:06d}"[:6]`, which for
+index 0 formats "9000100" and then truncates to "900010". Indices 0 through 9
+all truncate to the same six digits, so every group of ten vessels shared an IMO
+number. Since the IMO is the truth id, the golden set concluded that ten
+distinct hulls were one entity and emitted 45 "matches" per group.
+
+**Fix.** `str(900000 + index)` with an `assert len(six) == 6` next to it.
+
+**Lesson.** The bug was in the thing that decides what is true, so nothing
+downstream could have caught it - the resolver would have been measured against
+a corrupted answer key and any number it produced would have been meaningless.
+Ground truth needs sanity checks of its own, and the cheapest one is a
+distribution: match-to-non-match ratio, cluster sizes, identifier uniqueness.
+Look at the shape of an answer key before trusting a score computed against it.
+
+---
+
+## The blocking key I argued for, measured at zero          2026-08-13
+
+**Symptom.** Not a failure - a measurement. The per-key attribution table showed
+`name_soundex` producing 358 candidate pairs, the second-largest contribution of
+any key, and catching **zero** true pairs that another key had not already
+caught.
+
+**Root cause.** Nothing is broken. The cross-source name variation in this
+corpus is casing, diacritics and truncation, and the normalizer already folds
+all three before the phonetic key runs. Soundex earns its keep when two sources
+*spell* a name differently, and the sources modelled here both derive from the
+same romanisation, so that case does not occur.
+
+**Fix.** None yet, deliberately. Cutting the key because a 451-record sample did
+not need it would be over-fitting to the sample - the full UN/LOCODE download
+contains exactly the transliteration variance this corpus lacks. It stays in,
+with the table in `docs/ER.md` as the standing reason to revisit it after
+`data/fetch.sh`.
+
+**Lesson.** The value was in building the attribution column at all. "Which key
+caught this pair, and was it the only one" costs a `std::vector<std::string>`
+per candidate and turns an argument about blocking design into a table. The
+counts were what changed my mind; the header comment in `phonetic.h` had
+predicted this outcome and I had still assumed the key was pulling its weight.
+
+---
+
+## Parallel tests, one database directory, eight segfaults          2026-08-13
+
+**Symptom.** Eight of the eleven blocking tests crashed with SIGSEGV under
+`ctest -j4`. Run individually, every one passed. Run with `-j1`, all passed.
+
+**Root cause.** `gtest_discover_tests` registers each `TEST_F` as its own ctest
+entry, so ctest runs them as separate processes - each executing the whole
+fixture, including `SetUpTestSuite`. Every process opened the same directory
+name. The first took the LOCK, the rest got an error from `Store::Open`, the
+`ASSERT_TRUE` in `SetUpTestSuite` aborted setup but did not stop the test bodies
+from running, and they dereferenced a null `store_`.
+
+**Fix.** A directory name including the process id, plus reporting the actual
+`Status` rather than only asserting on it.
+
+**Lesson.** A crash that only appears under parallelism is usually not a memory
+bug, however much a segfault suggests one - it is a shared resource with a fixed
+name. And an `ASSERT_` in `SetUpTestSuite` does not prevent the tests from
+running, which is worth knowing before spending an hour reading a blocker for
+the pointer error that was never there.
+
+---
+
 <!-- Add entries as you go. Suggested candidates from the plan:
      - the first tombstone resurrection you hit once SSTables land (day 2-4)
      - whatever the lineage round-trip test catches on day 11 (it will catch
