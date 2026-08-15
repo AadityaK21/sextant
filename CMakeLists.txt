@@ -63,6 +63,8 @@ add_subdirectory(src/ontology)
 add_subdirectory(src/connectors)
 add_subdirectory(src/resolve)
 add_subdirectory(src/lineage)
+add_subdirectory(src/query)
+add_subdirectory(src/api)
 add_subdirectory(src/cli)
 
 if(SEXTANT_BUILD_TESTS)
