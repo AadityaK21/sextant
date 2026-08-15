@@ -28,9 +28,9 @@ C++20 · React · no storage dependencies
 | **Day 8** - normalization, blocking, RR/PC | ✅ | 350 tests green |
 | **Days 9-10** - scoring, clustering, fusion | ✅ | 370 tests green |
 | **Day 11** - link resolution, lineage, round-trip test | ✅ | 376 tests green |
-| Day 12 - query engine, HTTP API | ⬜ | |
-| Days 11-12 - lineage, query engine, HTTP API | ⬜ | |
+| **Day 12** - query planner, executor, cost accounting, HTTP API | ✅ | 410 tests green |
 | Days 13-14 - React frontend | ⬜ | |
+| Day 15 - polish, demo, remaining ADRs | ⬜ | |
 
 Plan: [`docs/EXECUTION_PLAN.md`](docs/EXECUTION_PLAN.md).
 
@@ -71,12 +71,41 @@ with no network and no downloads.
 ./build/src/cli/sextant eval                        # precision, recall, F1
 ./build/src/cli/sextant resolve                     # cluster, fuse, write entities
 ./build/src/cli/sextant explain                     # the lineage round-trip
+./build/src/cli/sextant query --type Port --where locode=NLRTM \
+    --link arrivals --from 2026-04-01T00:00:00Z --to 2026-07-01T00:00:00Z
+./build/src/cli/sextant serve                       # the query API on :8080
 ```
 
 ```
 lineage round trip
   1187 entities, 4201 properties
   4201 verified, 0 failed  ->  100.00%
+```
+
+`query` prints the plan, the answer and what it cost. The plan is a value the
+engine returns, not a log line, so the same text appears on every API response:
+
+```
+  plan
+1. resolve start set of Port
+     via IDX (IDX)
+     IDX on Port.locode serves locode eq NLRTM as a key range; the property is
+     unique-hinted, so this is expected to be one entity
+2. hop 1: Port <- arrives_at -> Voyage
+     via TIDX (TIDX)
+     the hop has a time predicate and 'arrives_at' carries a time_index on
+     arrived_at, so TIDX turns the window into one contiguous range: seek to
+     the start and read forward, with no candidate examined and rejected
+     window [2026-04-01T00:00:00.000Z, 2026-07-01T00:00:00.000Z)
+
+  24 result(s)
+
+  cost
+    index_used            TIDX
+    keys_scanned          25
+    entities_materialised 24
+    blocks_read           18  (cache hits 16)
+    elapsed_us            359
 ```
 
 On Windows, MSVC is a multi-config generator, so the binary lands one directory
@@ -133,19 +162,19 @@ not a filter - it is a range scan over a big-endian timestamp suffix
 
 ```
    web/            React - browse entities, links, lineage      NOT BUILT (days 13-14)
-   src/api/        HTTP + JSON                                  NOT BUILT (day 12)
-   src/query/      planner · index selection · traversal        NOT BUILT (day 12)
   ─────────────────────────────────────────────────────────────────────────────────
+   src/api/        HTTP routes · JSON · CORS · snapshot per request   built
+   src/query/      planner · index selection · executor · cost        built
    src/lineage/    provenance reader · round-trip verification  built
    src/resolve/    normalize · block · score · cluster · fuse · link   built
-   src/cli/        ingest · stats · block · eval · resolve · lineage · schema  built
+   src/cli/        ingest · stats · block · eval · resolve · lineage · query · serve  built
    src/connectors/ CSV · REST/JSON · Postgres                   built
    src/ontology/   declarative types, links and transforms      built
    src/codec/      key encoding - the glue                      built
    src/lsm/        WAL · MemTable · SSTable · Compaction        built
 ```
 
-**The directories above the line do not exist yet.** They are the plan, not the
+**The directory above the line does not exist yet.** It is the plan, not the
 code, and this diagram says so rather than letting the architecture imply a
 completeness the repository does not have. `git log` and the status table are
 the honest account of what is here; everything else is a design document.
@@ -193,7 +222,7 @@ what the engine does when durability is actually required.
 | Storage engine | 1.53M batched writes/sec · 494k random writes/sec · 3.7M misses/sec · write amplification **1.20x** |
 | | 655 writes/sec with `sync=true` - the fsync floor, quoted so the batched number is not read as a durability figure |
 | | Recovery bounded by buffer size, not data size: 2,013 records replayed instead of 202,200 |
-| Correctness | 314 tests green on Linux, Windows and macOS · clean under ASan + UBSan · lock-free skiplist clean under ThreadSanitizer |
+| Correctness | 410 tests green on Linux, Windows and macOS · clean under ASan + UBSan · lock-free skiplist clean under ThreadSanitizer |
 | | Differential test: 60k random ops vs `std::map`, forced across ~40 flushes and many SSTables |
 | | Torn-WAL recovery: every acknowledged write survives a truncated log tail |
 | | Block and SSTable CRCs reject single-bit corruption |
@@ -213,11 +242,18 @@ what the engine does when durability is actually required.
 | Entity resolution | **F1 0.991** on a held-out split the weights were never fitted to (266 port pairs) · 1.000 on vessels · [methodology](docs/ER.md) |
 | | Veto-constrained clustering measured against plain union-find: precision **1.000 vs 0.973**, 10 merges refused |
 | | Three pairs where the MMSI matches exactly and the answer is still no - an IMO conflict is a rule, not a weight to be outvoted |
-| | 459 records resolve to 187 entities, dedup ratio **0.593**, every property carrying provenance with its rejected alternatives |
+| | 451 port and vessel records resolve to 187 entities, **58% of records merged away**, every property carrying provenance with its rejected alternatives |
+| | Across the whole corpus 1,451 records become 1,187 entities. The 1,000 voyages are 1:1 by construction, so quoting the combined ratio as a resolution result would be flattering the number with rows that were never duplicates |
 | Lineage | **Round-trip verified for 100% of 4,201 resolved properties** across 1,187 entities - read the provenance, fetch the raw row, replay the chain, assert equality |
 | | The round trip has a negative control: corrupt a provenance record and it must go red, because a checker that cannot fail is not a check |
 | | "Why does this say Rotterdam?" is two point lookups, both O(log n) - no scan, no join, no separate lineage store |
 | | The quarter-query over resolved data: **24 arrivals returned, 24 keys scanned** - a range scan, not a filter |
+| Query engine | **410 tests green**, clean under ASan + UBSan · the planner names its access path and its reason on every step |
+| | The quarter query end to end over HTTP: **24 arrivals, 24 keys scanned, `index_used: "TIDX"`, 230 us** |
+| | The index and the full scan are asserted to return **the same 24 voyages** out of 92 arrivals - the index is an optimisation, not a filter that quietly drops rows |
+| | Cost comes from a `ReadStats` the request owns, threaded into the storage engine, so it is this query's cost even with a compaction running underneath |
+| | An indexed lookup reads **1 key** where the equivalent scan reads 144 |
+| | The plan's warning found a real schema gap on its first run: the search box had no index behind it |
 
 ### The result that matters most
 
@@ -245,6 +281,39 @@ name = Rotterdam
     "ROTTERDAM" from source 1 row 1 (Main Port Name)
       lower source trust (0.80 < 0.95)
 ```
+
+### Every response says what it cost
+
+```
+$ curl -s localhost:8080/api/traverse -d @quarter.json | jq '._stats'
+{
+  "index_used": "TIDX",
+  "keys_scanned": 24,
+  "entities_materialised": 24,
+  "blocks_read": 13,
+  "block_cache_hits": 16,
+  "bloom_rejections": 0,
+  "sstables_probed": 24,
+  "elapsed_us": 230
+}
+```
+
+Those numbers are not the executor's arithmetic. Each read carries a
+`ReadStats` that the storage engine increments as it goes, so `blocks_read`
+counts blocks the table layer actually pulled off disk and `keys_scanned`
+counts entries the iterators actually stepped over.
+
+The first version diffed the process-wide `Stats` before and after. It was
+correct on one thread and wrong the moment a second request or a background
+compaction moved the same counters - which is the worst kind of bug, because it
+does not show up in the test that made you confident.
+
+The claim `keys_scanned: 24` for 24 results is what an interviewer should be
+invited to check, so there is a test that checks it a second way: the same
+window resolved through the time index and through a full adjacency scan is
+asserted to return **the same 24 voyages** out of 92 total arrivals. An
+off-by-one bound would return a plausible number of rows quickly and pass every
+test that only looks at speed.
 
 ---
 

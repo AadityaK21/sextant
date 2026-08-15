@@ -573,6 +573,133 @@ join across them. If data is generated, generate all of it.
 
 ---
 
+## The time index was chosen in a direction it cannot serve       2026-08-16
+
+**Symptom.** None, at first. The planner chose `TIDX` whenever a hop had a time
+predicate and the link declared a `time_index`, and the quarter query worked.
+
+**Root cause.** TIDX is anchored on the **target** of the timed link:
+
+```
+TIDX | link_type(2) | anchor_eid(16) | ts_be(8) | entity_id(16)
+```
+
+The anchor is the port, because the question the index exists for is "what
+arrived *here* in this window". That makes it useful walking *backwards* along
+the link, from the port to the voyages. Walking forwards, from a voyage to its
+port, there is no anchor to seek to - the executor would have seeked to a key
+prefixed by the voyage's id, found nothing, and returned an empty result.
+
+It never fired because the natural way to write the query is the direction that
+works. A demo would have hit it the first time someone asked "which port did
+this voyage arrive at, in April".
+
+**Fix.** The planner tests direction as well as declaration, and when the index
+cannot serve the hop it says so in the reason rather than choosing it anyway:
+
+> `'arrives_at' has a time_index, but TIDX is anchored on Port and this hop
+> walks away from the anchor, so the window is applied as a filter instead`
+
+**Lesson.** An index is not "available for a link". It is available for a
+*direction* of a link, and a planner that only checks the schema flag will
+happily pick one that cannot answer the question. The keyspace layout said this
+plainly and I read past it.
+
+---
+
+## Declining to use an index quietly dropped the predicate         2026-08-16
+
+**Symptom.** Caught while writing the fallback above, before it could ship.
+
+**Root cause.** The time window lived only in the TIDX branch. When the planner
+chose `LINKOUT` instead, nothing applied the window at all - the hop returned
+every neighbour, ignoring the dates entirely. Choosing a slower access path had
+silently become choosing a *different question*.
+
+**Fix.** The executor applies the window as a filter on the materialised entity
+whenever the plan did not push it into a key range, and there is a test that
+runs the same window both ways and asserts the two return the same voyages:
+
+```
+index 24, scan-and-filter 24, all arrivals 92 (24 keys vs 92)
+```
+
+**Lesson.** The line between "how fast" and "what answer" is the one line in a
+query engine that must never move. Every access-path decision needs a partner
+test proving the answer did not change, because the failure mode - fewer rows,
+returned quickly - looks like success from every angle except correctness.
+
+---
+
+## The architecture document named a link the schema did not have  2026-08-16
+
+**Symptom.** Six tests failed with `unknown link type: arrivals`.
+
+**Root cause.** `ARCHITECTURE.md` §10 uses `"link": "arrivals"` in its example
+traverse request. The ontology declares the link as `arrives_at` with
+`inverse: arrivals`. Only the forward name resolved, so the documented request
+could not run.
+
+Neither was wrong on its own. `arrivals` is the right name for the question a
+port asks, and it is what a UI would put on a button. The gap was that nothing
+in the code knew the inverse name existed.
+
+**Fix.** `Ontology::LinkOrInverse` resolves either name and reports which end
+was named, and naming the inverse *is* the direction - so a client asking a Port
+for its `arrivals` never has to supply a `reverse` flag it would have to
+re-derive the schema to get right.
+
+**Lesson.** A design document is only executable if something executes it. This
+one had been read many times and the mismatch survived every reading, because
+prose does not fail.
+
+---
+
+## The search box had no index behind it                           2026-08-16
+
+**Symptom.** Not a failure. The planner said so, out loud, on its first run:
+
+```
+full scan of Port: no usable index for name starts_with Rott
+```
+
+**Root cause.** `Port.name` was declared `title: true` but not `indexed: true`.
+The `/api/entities?q=` route searches the title property, so the search box -
+the single most-used thing in the eventual UI - was going to be a full scan of
+every port, every keystroke.
+
+**Fix.** `indexed: true` on the title property of Port and Vessel. The prefix
+search is now a genuine range scan, which needed one more piece:
+`EncodeOrderedStringPrefix`, the escaping *without* the terminator. The
+terminated form is an exact-match bound - `"ROTT"` plus its terminator sorts
+after every key for `"ROTTERDAM"`, so seeking to it finds nothing.
+
+**Lesson.** This is the entire argument for putting the plan on the response.
+The query would have worked. It would have been correct, and slow, and nothing
+would have said why - and by the time anyone profiled it, the missing index
+would look like a database problem rather than a one-line schema fix.
+
+---
+
+## The CLI and the API disagreed about what "dedup ratio" meant    2026-08-16
+
+**Symptom.** `sextant resolve` printed `dedup ratio 0.1819`. `/api/stats`
+returned `"dedup_ratio": 0.8181`. Same database, same moment.
+
+**Root cause.** Two defensible definitions of one name. The CLI reports the
+fraction of records *removed* by merging; the API had been written to report
+entities per source record. They are complements, so both looked plausible in
+isolation and neither test noticed.
+
+**Fix.** The API matches the CLI, and the test now derives the expected value
+from the two counts in the same response rather than asserting a loose range.
+
+**Lesson.** A metric with two definitions is worse than no metric. This one
+would have surfaced live, in the worst possible way: a number on screen that
+does not match the number in the README.
+
+---
+
 <!-- Add entries as you go. Suggested candidates from the plan:
      - the first tombstone resurrection you hit once SSTables land (day 2-4)
      - whatever the lineage round-trip test catches on day 11 (it will catch
