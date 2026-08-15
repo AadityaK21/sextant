@@ -79,9 +79,43 @@ else()
   message(STATUS "PostgreSQL not found - the postgres connector will be stubbed")
 endif()
 
-# --- Dependencies added in later milestones --------------------------------
+# --- cpp-httplib: the query API's HTTP layer -------------------------------
 #
-# Day 12 - HTTP server for the query API
-#   FetchContent_Declare(httplib
-#     GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-#     GIT_TAG v0.20.0 GIT_SHALLOW TRUE)
+# WHY THIS ONE
+#
+# It is a single header with no dependencies and a blocking thread-per-request
+# model. That last part is usually a criticism and here it is the point: a
+# request holds an LSM snapshot for its whole life, and a blocking handler makes
+# the snapshot's lifetime exactly the handler's scope. An async server would
+# turn that into a lifetime problem to solve for no benefit at this scale.
+#
+# WHY THERE IS A VENDORED FALLBACK
+#
+# Every other dependency here is fetched from GitHub, and on a restricted
+# network that has already been the slowest and least reliable part of a
+# configure. cpp-httplib is ONE header, so vendoring it is genuinely viable in
+# a way that vendoring yaml-cpp would not be. If third_party/httplib.h exists,
+# it is used and nothing is fetched.
+#
+# The result either way is an INTERFACE target named `httplib`, so nothing
+# downstream knows or cares which path was taken.
+# The target is named sextant_httplib rather than httplib because the upstream
+# project already defines a target called `httplib`, and CMake refuses two
+# targets with one name. Found out the direct way.
+add_library(sextant_httplib INTERFACE)
+
+if(EXISTS ${CMAKE_SOURCE_DIR}/third_party/httplib.h)
+  message(STATUS "cpp-httplib: using the vendored header, no fetch")
+  target_include_directories(sextant_httplib INTERFACE ${CMAKE_SOURCE_DIR}/third_party)
+else()
+  FetchContent_Declare(cpp_httplib
+    GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+    GIT_TAG        v0.18.3
+    GIT_SHALLOW    TRUE)
+  FetchContent_MakeAvailable(cpp_httplib)
+  target_link_libraries(sextant_httplib INTERFACE httplib)
+endif()
+
+# Thread support: the server runs a handler per connection.
+find_package(Threads REQUIRED)
+target_link_libraries(sextant_httplib INTERFACE Threads::Threads)
