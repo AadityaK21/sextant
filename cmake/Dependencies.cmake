@@ -42,6 +42,18 @@ set(YAML_CPP_FORMAT_SOURCE OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(yaml-cpp)
 
 # --- nlohmann/json: the REST connector, and later the API server -----------
+#
+# NOTE ON THE FIRST CONFIGURE BEING SLOW. This repository carries a large
+# test-data history, so even a shallow clone pulls tens of megabytes and can
+# take several minutes on a slow link. Upstream recommends the release tarball
+# instead, which is a few hundred kilobytes:
+#
+#   URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
+#
+# That is left commented out because release downloads are blocked on some
+# restricted networks that still allow git, and a dependency that fails to
+# fetch behind a proxy is worse than one that fetches slowly. If your configure
+# step is slow and you can reach the release URL, switch to it.
 FetchContent_Declare(nlohmann_json
   GIT_REPOSITORY https://github.com/nlohmann/json.git
   GIT_TAG        v3.12.0

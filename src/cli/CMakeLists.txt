@@ -1,4 +1,4 @@
-add_executable(sextant main.cpp)
+add_executable(sextant main.cpp resolve_commands.cpp)
 
 target_link_libraries(sextant PRIVATE sextant_resolve sextant_warnings)
 target_include_directories(sextant PRIVATE

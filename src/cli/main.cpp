@@ -34,6 +34,7 @@
 #include "json_source.h"
 #include "postgres.h"
 #include "record.h"
+#include "resolve_commands.h"
 #include "sextant/lsm/options.h"
 #include "sextant/lsm/status.h"
 #include "store.h"
@@ -107,6 +108,15 @@ usage:
   sextant block   [--db DIR] [--schema DIR] [--eval DIR] [--max-block N]
       Build the blocking index and report reduction ratio and pair
       completeness against the golden sets in eval/.
+
+  sextant eval    [--db DIR] [--schema DIR] [--eval DIR] [--tune]
+      Score the golden set and report the confusion matrix, precision,
+      recall and F1 on a held-out split. --tune fits the weights on the
+      training split only and prints them for schema/resolver.yaml.
+
+  sextant resolve [--db DIR] [--schema DIR] [--eval DIR] [--dry-run]
+      Score every candidate pair, cluster it both ways, and write the
+      resolved entities with their provenance.
 
   sextant lineage --source ID --batch N --row N [--db DIR]
       Print the verbatim source row a lineage reference points at.
@@ -574,6 +584,16 @@ int main(int argc, char** argv) {
   if (args.command == "ingest") return CmdIngest(args);
   if (args.command == "stats") return CmdStats(args);
   if (args.command == "block") return CmdBlock(args);
+  if (args.command == "eval" || args.command == "resolve") {
+    // These two live in resolve_commands.cpp - between them they are longer
+    // than the rest of the CLI put together.
+    sextant::cli::Args forwarded;
+    forwarded.command = args.command;
+    forwarded.flags = args.flags;
+    forwarded.positional = args.positional;
+    return args.command == "eval" ? sextant::cli::CmdEval(forwarded)
+                                  : sextant::cli::CmdResolve(forwarded);
+  }
   if (args.command == "lineage") return CmdLineage(args);
 
   std::fprintf(stderr, "unknown command \"%s\"\n\n", args.command.c_str());

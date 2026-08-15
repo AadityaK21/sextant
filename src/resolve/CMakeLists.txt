@@ -2,8 +2,13 @@ add_library(sextant_resolve
   normalize.cpp
   geohash.cpp
   phonetic.cpp
+  similarity.cpp
   golden.cpp
   blocking.cpp
+  scorer.cpp
+  evaluate.cpp
+  cluster.cpp
+  fuse.cpp
 )
 
 target_include_directories(sextant_resolve
@@ -19,6 +24,6 @@ target_compile_features(sextant_resolve PUBLIC cxx_std_20)
 # file that a person edits by hand.
 target_link_libraries(sextant_resolve
   PUBLIC  sextant_connectors
-  PRIVATE sextant_warnings)
+  PRIVATE yaml-cpp::yaml-cpp sextant_warnings)
 
 add_library(sextant::resolve ALIAS sextant_resolve)
