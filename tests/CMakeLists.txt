@@ -111,6 +111,7 @@ function(sextant_add_lineage_test name)
   target_link_libraries(${name} PRIVATE sextant_lineage sextant_warnings
                                         GTest::gtest_main)
   target_include_directories(${name} PRIVATE
+    ${CMAKE_SOURCE_DIR}/tests/support
     ${CMAKE_SOURCE_DIR}/src/lineage
     ${CMAKE_SOURCE_DIR}/src/resolve
     ${CMAKE_SOURCE_DIR}/src/connectors
@@ -123,3 +124,32 @@ function(sextant_add_lineage_test name)
 endfunction()
 
 sextant_add_lineage_test(test_lineage lineage/test_lineage.cpp)
+
+# --- day 12: the query engine and the HTTP API ---
+#
+# These link sextant_api rather than sextant_query, because the API test binds
+# a real socket and talks to itself over HTTP. Testing the routes through a
+# fake would be testing the fake.
+function(sextant_add_query_test name)
+  add_executable(${name} ${ARGN})
+  target_link_libraries(${name} PRIVATE sextant_api sextant_httplib sextant_warnings
+                                        GTest::gtest_main)
+  target_include_directories(${name} PRIVATE
+    ${CMAKE_SOURCE_DIR}/tests/support
+    ${CMAKE_SOURCE_DIR}/src/api
+    ${CMAKE_SOURCE_DIR}/src/query
+    ${CMAKE_SOURCE_DIR}/src/lineage
+    ${CMAKE_SOURCE_DIR}/src/resolve
+    ${CMAKE_SOURCE_DIR}/src/connectors
+    ${CMAKE_SOURCE_DIR}/src/ontology
+    ${CMAKE_SOURCE_DIR}/src/codec
+    ${CMAKE_SOURCE_DIR}/src/lsm
+    ${CMAKE_SOURCE_DIR}/include)
+  target_compile_definitions(${name} PRIVATE SEXTANT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  # The corpus fixture runs the whole pipeline before the first assertion, which
+  # takes longer than the default discovery timeout allows for.
+  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 60)
+endfunction()
+
+sextant_add_query_test(test_query query/test_query.cpp)
+sextant_add_query_test(test_api   api/test_api.cpp)

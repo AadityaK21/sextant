@@ -28,200 +28,42 @@
 #include <cstdio>
 #include <memory>
 #include <string>
-#include <unordered_map>
-#include <utility>
 #include <vector>
 
-#include "blocking.h"
-#include "bundle.h"
-#include "cluster.h"
-#include "csv.h"
-#include "env.h"
-#include "fuse.h"
-#include "ingest.h"
-#include "json_source.h"
-#include "link.h"
-#include "scorer.h"
-#include "store.h"
-
-// DO NOT SORT THIS BLOCK. scripts/check_includes.py --fix reordered these
-// across the #if/#else once and produced "#else without #if" - the same failure
-// env.cpp hit on day 6, for the same reason. Both files are in SKIP_FIX now.
-#if defined(_WIN32)
-#include <windows.h>
-#else
-#include <unistd.h>
-#endif
+#include "corpus.h"
 
 using namespace sextant::lineage;
 
 namespace onto = sextant::ontology;
-namespace conn = sextant::connectors;
 namespace codec = sextant::codec;
 namespace lsm = sextant::lsm;
 namespace resolve = sextant::resolve;
 
 namespace {
 
-std::string SourceDir() { return std::string(SEXTANT_SOURCE_DIR); }
+using sextant::testsupport::Corpus;
+using sextant::testsupport::SourceDir;
 
-unsigned long ProcessId() {
-#if defined(_WIN32)
-  return static_cast<unsigned long>(::GetCurrentProcessId());
-#else
-  return static_cast<unsigned long>(::getpid());
-#endif
-}
-
-// Ingests, resolves and links the whole committed corpus once, so the tests
-// below run against the same pipeline output the CLI produces.
+// The whole pipeline, built once. Lives in tests/support/corpus.h because the
+// query suite needs exactly the same thing, and two copies of a 150-line setup
+// is how two suites end up disagreeing about what "the corpus" is while both
+// pass.
 class LineageTest : public ::testing::Test {
  protected:
-  static std::string dbname_;
-  static std::unique_ptr<codec::Store> store_;
-  static onto::SchemaBundle bundle_;
-  static resolve::ResolverProperties props_;
-  static resolve::LinkReport links_;
-  static uint64_t entities_written_;
-
-  static void Destroy() {
-    std::vector<std::string> children;
-    if (lsm::GetChildren(dbname_, &children).ok()) {
-      for (const auto& c : children) {
-        if (c == "." || c == "..") continue;
-        lsm::RemoveFile(dbname_ + "/" + c);
-      }
-    }
-    std::remove(dbname_.c_str());
-  }
+  static Corpus corpus_;
 
   static void SetUpTestSuite() {
-    dbname_ = "lineagetest_db_" + std::to_string(ProcessId());
-    Destroy();
-
-    lsm::Options options;
-    options.create_if_missing = true;
-    ASSERT_TRUE(codec::Store::Open(options, dbname_, &store_).ok());
-    ASSERT_TRUE(
-        onto::SchemaBundle::LoadFromDir(SourceDir() + "/schema", &bundle_).ok());
-    ASSERT_TRUE(
-        resolve::ResolverProperties::Resolve(bundle_.ontology(), &props_).ok());
-
-    conn::Ingestor ingestor(store_.get(), &bundle_.ontology(),
-                            &bundle_.transforms());
-    for (const char* key : {"wpi", "unlocode"}) {
-      const onto::SourceSpec* spec = bundle_.Source(key);
-      std::unique_ptr<conn::CsvReader> reader;
-      ASSERT_TRUE(
-          conn::CsvReader::Open(SourceDir() + "/" + spec->uri, &reader).ok());
-      conn::Ingestor::Result result;
-      ASSERT_TRUE(ingestor.Run(*spec, reader.get(), 0, {}, &result).ok());
-    }
-    conn::SnapshotFetcher fetcher(SourceDir() + "/data/snapshots/digitraffic");
-    const std::pair<const char*, const char*> endpoints[] = {
-        {"digitraffic", "ports"},
-        {"digitraffic", "vessel_details"},
-        {"digitraffic_ais", "ais_vessels"},
-    };
-    for (const auto& [source_key, endpoint] : endpoints) {
-      std::string body;
-      ASSERT_TRUE(fetcher.Fetch(endpoint, "/", &body).ok());
-      std::unique_ptr<conn::JsonRowSource> rows;
-      ASSERT_TRUE(conn::JsonRowSource::Open(body, "", endpoint, &rows).ok());
-      conn::Ingestor::Result result;
-      ASSERT_TRUE(
-          ingestor.Run(*bundle_.Source(source_key), rows.get(), 0, {}, &result)
-              .ok());
-    }
-    // Port calls, which are the Voyage entity and the only source of links.
-    {
-      std::string body;
-      ASSERT_TRUE(fetcher.Fetch("port_calls", "/", &body).ok());
-      std::unique_ptr<conn::JsonRowSource> rows;
-      ASSERT_TRUE(
-          conn::JsonRowSource::Open(body, "portCalls", "port_calls", &rows).ok());
-      conn::Ingestor::Result result;
-      ASSERT_TRUE(
-          ingestor.Run(*bundle_.Source("digitraffic"), rows.get(), 0, {}, &result)
-              .ok());
-    }
-
-    // Load, block, score, cluster, fuse, write, link - the whole pipeline.
-    std::unordered_map<resolve::RecordRef, onto::SourceRecord,
-                       resolve::RecordRefHash>
-        records;
-    for (const auto& spec : bundle_.sources()) {
-      auto it = store_->ScanSourceRecords(spec.id);
-      for (; it->Valid(); it->Next()) {
-        lsm::Slice value = it->value();
-        onto::SourceRecord record;
-        if (!onto::SourceRecord::DecodeFrom(&value, &record)) continue;
-        records[resolve::RecordRef{record.source_id, record.natural_key_hash}] =
-            std::move(record);
-      }
-    }
-    ASSERT_GT(records.size(), 600u);
-
-    resolve::ScorerConfig config;
-    ASSERT_TRUE(resolve::ScorerConfig::LoadFromFile(
-                    SourceDir() + "/schema/resolver.yaml", &config)
-                    .ok());
-
-    resolve::Blocker blocker(store_.get(), &bundle_, &props_);
-    resolve::BlockingReport report;
-    ASSERT_TRUE(blocker.IndexAll(&report).ok());
-    std::vector<resolve::CandidatePairRef> candidates;
-    ASSERT_TRUE(blocker.GenerateCandidates({}, &candidates, &report).ok());
-
-    const resolve::PairScorer scorer(&config, &props_);
-    std::vector<resolve::ScoredEdge> edges;
-    for (const auto& candidate : candidates) {
-      const auto a = records.find(candidate.pair.a);
-      const auto b = records.find(candidate.pair.b);
-      if (a == records.end() || b == records.end()) continue;
-      const resolve::PairScore score = scorer.Score(a->second, b->second);
-      resolve::ScoredEdge edge;
-      edge.pair = candidate.pair;
-      edge.score = score.score;
-      edge.decision = score.decision;
-      edge.vetoed = score.vetoed;
-      edges.push_back(std::move(edge));
-    }
-
-    std::vector<resolve::RecordRef> all;
-    all.reserve(records.size());
-    for (const auto& [ref, record] : records) all.push_back(ref);
-
-    const resolve::ClusterSet clusters =
-        resolve::ClusterVetoConstrained(edges, all);
-    const resolve::Fuser fuser(&bundle_, &props_);
-    for (const auto& cluster : clusters.clusters) {
-      std::vector<const onto::SourceRecord*> members;
-      for (const auto& member : cluster) {
-        const auto it = records.find(member);
-        if (it != records.end()) members.push_back(&it->second);
-      }
-      if (members.empty()) continue;
-      const resolve::ResolvedEntity entity = fuser.Fuse(members, cluster, {});
-      ASSERT_TRUE(resolve::WriteEntity(store_.get(), bundle_, entity).ok());
-      ++entities_written_;
-    }
-    ASSERT_TRUE(
-        resolve::ResolveLinks(store_.get(), bundle_, props_, &links_).ok());
+    ASSERT_TRUE(sextant::testsupport::BuildCorpus("lineagetest", &corpus_));
+    ASSERT_GT(corpus_.source_records, 600u);
   }
 
   static void TearDownTestSuite() {
-    store_.reset();
-    Destroy();
+    corpus_.store.reset();
+    corpus_.Destroy();
   }
 };
 
-std::string LineageTest::dbname_;
-std::unique_ptr<codec::Store> LineageTest::store_;
-onto::SchemaBundle LineageTest::bundle_;
-resolve::ResolverProperties LineageTest::props_;
-resolve::LinkReport LineageTest::links_;
-uint64_t LineageTest::entities_written_ = 0;
+Corpus LineageTest::corpus_;
 
 }  // namespace
 
@@ -229,7 +71,7 @@ uint64_t LineageTest::entities_written_ = 0;
 // THE HEADLINE RESULT
 // ============================================================================
 TEST_F(LineageTest, EveryPropertyOfEveryEntityRoundTrips) {
-  const LineageReader reader(store_.get(), &bundle_, SourceDir());
+  const LineageReader reader(corpus_.store.get(), &corpus_.bundle, SourceDir());
   RoundTripReport report;
   ASSERT_TRUE(reader.RoundTrip(&report).ok());
 
@@ -255,17 +97,17 @@ TEST_F(LineageTest, EveryPropertyOfEveryEntityRoundTrips) {
 // A round trip that cannot fail is not a test. This corrupts a stored
 // provenance record and asserts the checker notices.
 TEST_F(LineageTest, TheRoundTripDetectsACorruptedProvenanceRecord) {
-  const LineageReader reader(store_.get(), &bundle_, SourceDir());
+  const LineageReader reader(corpus_.store.get(), &corpus_.bundle, SourceDir());
 
   // Find a property whose provenance points at a real raw cell, and rewrite the
   // record so its origin names a row that does not exist.
-  const onto::EntityTypeDef* port = bundle_.ontology().Type("Port");
+  const onto::EntityTypeDef* port = corpus_.bundle.ontology().Type("Port");
   ASSERT_NE(nullptr, port);
 
   codec::Ulid victim;
   codec::PropId prop = 0;
   bool found = false;
-  for (auto it = store_->ScanEntities(port->id); it->Valid(); it->Next()) {
+  for (auto it = corpus_.store->ScanEntities(port->id); it->Valid(); it->Next()) {
     codec::TypeId type = 0;
     codec::Ulid id;
     if (!codec::DecodeEntityKey(it->key(), &type, &id)) continue;
@@ -288,7 +130,7 @@ TEST_F(LineageTest, TheRoundTripDetectsACorruptedProvenanceRecord) {
   // notice.
   resolve::Provenance corrupted;
   {
-    auto it = store_->ScanProvenance(victim, prop);
+    auto it = corpus_.store->ScanProvenance(victim, prop);
     ASSERT_TRUE(it->Valid());
     lsm::Slice value = it->value();
     ASSERT_TRUE(resolve::Provenance::DecodeFrom(&value, &corrupted));
@@ -297,7 +139,7 @@ TEST_F(LineageTest, TheRoundTripDetectsACorruptedProvenanceRecord) {
   std::string encoded;
   corrupted.EncodeTo(&encoded);
 
-  codec::EntityWriter writer = store_->EditEntity(port->id, victim);
+  codec::EntityWriter writer = corpus_.store->EditEntity(port->id, victim);
   writer.AddProvenance(prop, 1, lsm::Slice(encoded));
   ASSERT_TRUE(writer.Commit().ok());
 
@@ -318,11 +160,11 @@ TEST_F(LineageTest, TheRoundTripDetectsACorruptedProvenanceRecord) {
 // --- the explanation itself -------------------------------------------------
 
 TEST_F(LineageTest, AnExplanationCarriesTheWholeChain) {
-  const LineageReader reader(store_.get(), &bundle_, SourceDir());
-  const onto::EntityTypeDef* port = bundle_.ontology().Type("Port");
+  const LineageReader reader(corpus_.store.get(), &corpus_.bundle, SourceDir());
+  const onto::EntityTypeDef* port = corpus_.bundle.ontology().Type("Port");
 
   int checked = 0, with_rejections = 0, merged = 0;
-  for (auto it = store_->ScanEntities(port->id); it->Valid() && checked < 40;
+  for (auto it = corpus_.store->ScanEntities(port->id); it->Valid() && checked < 40;
        it->Next()) {
     codec::TypeId type = 0;
     codec::Ulid id;
@@ -360,12 +202,12 @@ TEST_F(LineageTest, AnExplanationCarriesTheWholeChain) {
 }
 
 TEST_F(LineageTest, RawCellExtractionHandlesBothConnectorShapes) {
-  const LineageReader reader(store_.get(), &bundle_, SourceDir());
+  const LineageReader reader(corpus_.store.get(), &corpus_.bundle, SourceDir());
 
   // CSV: the column name is turned into a position using the source's header,
   // and the row is parsed with the same reader the connector used - so quoting
   // and embedded separators survive.
-  const onto::SourceSpec* wpi = bundle_.Source("wpi");
+  const onto::SourceSpec* wpi = corpus_.bundle.Source("wpi");
   ASSERT_NE(nullptr, wpi);
   std::string cell;
   ASSERT_TRUE(reader
@@ -384,7 +226,7 @@ TEST_F(LineageTest, RawCellExtractionHandlesBothConnectorShapes) {
 
   // A multi-column property records its columns joined with '+', and the cell
   // is rebuilt the same way the mapper built it.
-  const onto::SourceSpec* unlocode = bundle_.Source("unlocode");
+  const onto::SourceSpec* unlocode = corpus_.bundle.Source("unlocode");
   ASSERT_TRUE(reader
                   .RawCell(*unlocode,
                            ",NL,RTM,Rotterdam,Rotterdam,,AI,1-3-----,0401,,"
@@ -394,7 +236,7 @@ TEST_F(LineageTest, RawCellExtractionHandlesBothConnectorShapes) {
   EXPECT_EQ(std::string("NL") + '\x1f' + "RTM", cell);
 
   // JSON: the same dotted path the mapping used.
-  const onto::SourceSpec* digitraffic = bundle_.Source("digitraffic");
+  const onto::SourceSpec* digitraffic = corpus_.bundle.Source("digitraffic");
   ASSERT_TRUE(reader
                   .RawCell(*digitraffic,
                            R"({"portCallId":1,"portAreaDetails":[{"ata":"2026-04-03T07:15:00+03:00"}]})",
@@ -408,16 +250,16 @@ TEST_F(LineageTest, RawCellExtractionHandlesBothConnectorShapes) {
 // --- links ------------------------------------------------------------------
 
 TEST_F(LineageTest, LinksResolvedIntoEdgesAndTheTimeIndex) {
-  EXPECT_GT(links_.references_seen, 500u);
-  EXPECT_EQ(0u, links_.orphaned)
+  EXPECT_GT(corpus_.links.references_seen, 500u);
+  EXPECT_EQ(0u, corpus_.links.orphaned)
       << "a source record with links did not end up in any entity";
-  EXPECT_GT(links_.edges_written, 500u);
-  EXPECT_GT(links_.time_indexed, 300u);
+  EXPECT_GT(corpus_.links.edges_written, 500u);
+  EXPECT_GT(corpus_.links.time_indexed, 300u);
 
   // All three link types the ontology declares.
-  EXPECT_GT(links_.by_link_type["arrives_at"], 100u);
-  EXPECT_GT(links_.by_link_type["departs_from"], 100u);
-  EXPECT_GT(links_.by_link_type["operated_by"], 100u);
+  EXPECT_GT(corpus_.links.by_link_type["arrives_at"], 100u);
+  EXPECT_GT(corpus_.links.by_link_type["departs_from"], 100u);
+  EXPECT_GT(corpus_.links.by_link_type["operated_by"], 100u);
 }
 
 // THE HEADLINE QUERY, over real resolved data rather than a synthetic fixture.
@@ -426,20 +268,20 @@ TEST_F(LineageTest, LinksResolvedIntoEdgesAndTheTimeIndex) {
 // sequential read. `keys_scanned` proves it: the scan touches only the matching
 // keys, so nothing is examined and rejected.
 TEST_F(LineageTest, TheQuarterQueryIsARangeScanOverResolvedData) {
-  const onto::LinkTypeDef* arrives = bundle_.ontology().Link("arrives_at");
+  const onto::LinkTypeDef* arrives = corpus_.bundle.ontology().Link("arrives_at");
   ASSERT_NE(nullptr, arrives);
-  const onto::EntityTypeDef* port = bundle_.ontology().Type("Port");
+  const onto::EntityTypeDef* port = corpus_.bundle.ontology().Type("Port");
 
   // Find the port with the most arrivals, so the window actually selects
   // something.
   codec::Ulid busiest;
   uint64_t most = 0;
-  for (auto it = store_->ScanEntities(port->id); it->Valid(); it->Next()) {
+  for (auto it = corpus_.store->ScanEntities(port->id); it->Valid(); it->Next()) {
     codec::TypeId type = 0;
     codec::Ulid id;
     if (!codec::DecodeEntityKey(it->key(), &type, &id)) continue;
     uint64_t arrivals = 0;
-    for (auto in = store_->ScanIncoming(id, arrives->id); in->Valid(); in->Next()) {
+    for (auto in = corpus_.store->ScanIncoming(id, arrives->id); in->Valid(); in->Next()) {
       ++arrivals;
     }
     if (arrivals > most) {
@@ -454,7 +296,7 @@ TEST_F(LineageTest, TheQuarterQueryIsARangeScanOverResolvedData) {
   ASSERT_TRUE(onto::ParseIso8601("2026-04-01T00:00:00Z", &q2));
   ASSERT_TRUE(onto::ParseIso8601("2026-07-01T00:00:00Z", &q3));
 
-  auto scan = store_->ScanTimeRange(arrives->id, busiest, q2, q3);
+  auto scan = corpus_.store->ScanTimeRange(arrives->id, busiest, q2, q3);
   uint64_t matched = 0;
   for (; scan->Valid(); scan->Next()) {
     codec::LinkTypeId link_type = 0;

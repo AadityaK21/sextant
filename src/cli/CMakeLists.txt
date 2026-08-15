@@ -1,6 +1,6 @@
-add_executable(sextant main.cpp resolve_commands.cpp)
+add_executable(sextant main.cpp resolve_commands.cpp serve_commands.cpp)
 
-target_link_libraries(sextant PRIVATE sextant_lineage sextant_warnings)
+target_link_libraries(sextant PRIVATE sextant_api sextant_lineage sextant_warnings)
 target_include_directories(sextant PRIVATE
   ${CMAKE_SOURCE_DIR}/src/lsm
   ${CMAKE_SOURCE_DIR}/src/codec
@@ -8,4 +8,6 @@ target_include_directories(sextant PRIVATE
   ${CMAKE_SOURCE_DIR}/src/connectors
   ${CMAKE_SOURCE_DIR}/src/resolve
   ${CMAKE_SOURCE_DIR}/src/lineage
+  ${CMAKE_SOURCE_DIR}/src/query
+  ${CMAKE_SOURCE_DIR}/src/api
   ${CMAKE_SOURCE_DIR}/include)

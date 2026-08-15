@@ -35,6 +35,7 @@
 #include "postgres.h"
 #include "record.h"
 #include "resolve_commands.h"
+#include "serve_commands.h"
 #include "sextant/lsm/options.h"
 #include "sextant/lsm/status.h"
 #include "store.h"
@@ -127,9 +128,21 @@ usage:
   sextant lineage --source ID --batch N --row N [--db DIR]
       Print the verbatim source row a lineage reference points at.
 
+  sextant query   --type NAME [--where prop=value] [--link NAME [--reverse]]
+                  [--from ISO8601] [--to ISO8601] [--limit N] [--show N]
+                  [--json '{...}'] [--db DIR] [--schema DIR]
+      Run a traversal and print the plan, the results and what it cost.
+      --json takes the same body POST /api/traverse does.
+
+  sextant serve   [--host H] [--port N] [--static DIR] [--cors ORIGIN]
+                  [--no-cors] [--data-root DIR] [--db DIR] [--schema DIR]
+      Serve the query API over HTTP.
+
 defaults:
   --db      ./sextant-db
   --schema  ./schema
+  --host    127.0.0.1
+  --port    8080
 )");
 }
 
@@ -591,8 +604,9 @@ int main(int argc, char** argv) {
   if (args.command == "stats") return CmdStats(args);
   if (args.command == "block") return CmdBlock(args);
   if (args.command == "eval" || args.command == "resolve" ||
-      args.command == "explain") {
-    // These two live in resolve_commands.cpp - between them they are longer
+      args.command == "explain" || args.command == "query" ||
+      args.command == "serve") {
+    // These live in their own translation units - between them they are longer
     // than the rest of the CLI put together.
     sextant::cli::Args forwarded;
     forwarded.command = args.command;
@@ -600,6 +614,8 @@ int main(int argc, char** argv) {
     forwarded.positional = args.positional;
     if (args.command == "eval") return sextant::cli::CmdEval(forwarded);
     if (args.command == "resolve") return sextant::cli::CmdResolve(forwarded);
+    if (args.command == "query") return sextant::cli::CmdQuery(forwarded);
+    if (args.command == "serve") return sextant::cli::CmdServe(forwarded);
     return sextant::cli::CmdExplain(forwarded);
   }
   if (args.command == "lineage") return CmdLineage(args);
