@@ -1,0 +1,90 @@
+# Entity resolution weights and thresholds.
+#
+# WHY THIS IS A FILE AND NOT A HEADER
+#
+# Everything else in this project is a decision someone reasoned their way to.
+# These numbers are not - they came out of an optimiser, and they will change
+# again when the golden set grows. Keeping them in code means the figure quoted
+# in the README slowly stops matching the figure the binary produces, and
+# nobody notices because both are plausible.
+#
+# HOW THESE VALUES WERE PRODUCED
+#
+#   ./build/src/cli/sextant eval --tune
+#
+# Coordinate ascent over the weights, maximising F1 on the TRAINING split only
+# - a deterministic 80% of the golden set, chosen by hashing each pair. The
+# number reported in the README is measured on the held-out 20%, which the
+# tuner never saw. Reporting the training figure would be measuring how well
+# the optimiser memorised its input.
+#
+# HOW TO READ A WEIGHT
+#
+# Each feature contributes `value * weight`, where value is normally 0 to 1, and
+# the total is compared against the thresholds below. So `locode_exact: 6.0`
+# means an exact UN/LOCODE match on its own clears the 6.0 match threshold and
+# nothing else is needed - which is right, because that is the code authority
+# agreeing with itself.
+#
+# WHAT IS NOT HERE
+#
+# The veto rules. Two vessels with different IMO numbers are different hulls,
+# and that is not a weight to be outvoted by enough other evidence - it is a
+# rule. Vetoes live in src/resolve/scorer.cpp where they cannot be tuned away
+# by an optimiser chasing F1.
+
+Port:
+  weights:
+    # The code authority agreeing with itself. Sufficient on its own.
+    locode_exact: 6.00
+    # Identical names after normalization: strong, but two ports in one country
+    # genuinely can share a name, so not sufficient alone.
+    #
+    # Tuning raised this from 3.0 to 5.0, and the reason is visible in the data:
+    # the Digitraffic port feed carries no coordinates at all, so a pair where
+    # neither record has a code scores on name and country alone. At 3.0 those
+    # pairs totalled 4.0 and sat in the review band; the country veto already
+    # rules out the false positives that raising it would otherwise admit.
+    name_exact: 5.00
+    name_jaro_winkler: 5.00
+    name_jaccard: 1.50
+    # One name wholly contained in the other - "Rotterdam" inside "Rotterdam
+    # Botlek". The sub-location case.
+    name_contained: 1.50
+    # The World Port Index lists sub-locations as alternate names on the parent
+    # row. Often the only link between two records that share nothing else.
+    alt_name_match: 2.50
+    # Also raised by tuning, from 1.0. Safe to lean on because a country
+    # DISAGREEMENT is already a veto, so this weight only ever fires on pairs
+    # that agree - it is not being asked to outvote contrary evidence.
+    country_match: 3.00
+    geo_proximity: 2.50
+  match_threshold: 6.00
+  review_threshold: 4.00
+
+Vessel:
+  weights:
+    # An IMO is assigned to the hull for life. Agreement is close to proof, and
+    # DISAGREEMENT is a veto rather than a negative weight.
+    imo_exact: 8.00
+    # An MMSI belongs to the radio licence and is reissued on reflagging, so an
+    # exact match is a good reason to look, not a reason to merge.
+    mmsi_exact: 3.00
+    callsign_exact: 2.00
+    name_exact: 2.50
+    name_jaro_winkler: 3.00
+    name_jaccard: 1.00
+    flag_match: 0.50
+  match_threshold: 5.00
+  review_threshold: 3.00
+
+# Two port records further apart than this cannot describe the same place,
+# whatever their names say. Generous, because a large port complex spans tens of
+# kilometres and UN/LOCODE coordinates are only accurate to about 1.8 km.
+port_max_km: 150.0
+
+# Distance at which the geographic feature decays to roughly a third of its
+# weight. Exponential rather than linear: 2 km and 4 km apart are both "the
+# same port", and a linear scale would waste most of its range distinguishing
+# distances that carry no information.
+port_geo_scale_km: 25.0
