@@ -89,20 +89,24 @@ size_t ClusterSet::singletons() const {
 
 namespace {
 
-// Every record mentioned by any edge, so records that matched nothing still
-// become singleton clusters rather than disappearing.
-void SeedMembers(const std::vector<ScoredEdge>& edges, UnionFind* uf) {
+// Every record that should end up somewhere: both endpoints of every edge,
+// plus everything the caller says exists. The second half is what stops a
+// record blocking never proposed a pair for from disappearing entirely.
+void SeedMembers(const std::vector<ScoredEdge>& edges,
+                 const std::vector<RecordRef>& all_records, UnionFind* uf) {
   for (const auto& edge : edges) {
     uf->Add(edge.pair.a);
     uf->Add(edge.pair.b);
   }
+  for (const auto& ref : all_records) uf->Add(ref);
 }
 
 }  // namespace
 
-ClusterSet ClusterTransitive(const std::vector<ScoredEdge>& edges) {
+ClusterSet ClusterTransitive(const std::vector<ScoredEdge>& edges,
+                             const std::vector<RecordRef>& all_records) {
   UnionFind uf;
-  SeedMembers(edges, &uf);
+  SeedMembers(edges, all_records, &uf);
   for (const auto& edge : edges) {
     if (edge.decision != Decision::kMatch) continue;
     uf.Union(edge.pair.a, edge.pair.b);
@@ -112,9 +116,10 @@ ClusterSet ClusterTransitive(const std::vector<ScoredEdge>& edges) {
   return out;
 }
 
-ClusterSet ClusterVetoConstrained(const std::vector<ScoredEdge>& edges) {
+ClusterSet ClusterVetoConstrained(const std::vector<ScoredEdge>& edges,
+                                  const std::vector<RecordRef>& all_records) {
   UnionFind uf;
-  SeedMembers(edges, &uf);
+  SeedMembers(edges, all_records, &uf);
 
   // Every pair the scorer refused outright. A veto is not only a statement
   // about those two records - it constrains the whole chain, because after any

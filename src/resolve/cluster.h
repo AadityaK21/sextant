@@ -88,13 +88,21 @@ struct ClusterSet {
   size_t singletons() const;
 };
 
-// A matches B, B matches C, so A, B and C are one entity. Fast, simple, and
-// wrong in a way that compounds.
-ClusterSet ClusterTransitive(const std::vector<ScoredEdge>& edges);
+// `all_records` is every record that should end up in SOME cluster, including
+// the ones no candidate pair ever mentioned.
+//
+// That parameter is not a convenience. Seeding only from the edges silently
+// drops every record that blocking never proposed a pair for - which is not a
+// rare corner: Voyages produce no blocking keys at all, because they are
+// resolved through their links rather than by comparing attributes. Without
+// this they never become entities, and the graph is empty.
+ClusterSet ClusterTransitive(const std::vector<ScoredEdge>& edges,
+                             const std::vector<RecordRef>& all_records = {});
 
 // The same, in descending score order, refusing any merge that would place two
 // vetoed records in one cluster.
-ClusterSet ClusterVetoConstrained(const std::vector<ScoredEdge>& edges);
+ClusterSet ClusterVetoConstrained(const std::vector<ScoredEdge>& edges,
+                                  const std::vector<RecordRef>& all_records = {});
 
 // Cluster-level quality against the golden set.
 //
