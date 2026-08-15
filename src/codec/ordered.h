@@ -60,6 +60,18 @@ using lsm::Slice;
 // Append value with NUL escaping and a two-byte terminator.
 void EncodeOrderedString(std::string* dst, const Slice& value);
 
+// The same escaping WITHOUT the terminator.
+//
+// This is what makes a real prefix search possible. The terminated form is an
+// exact-match prefix: "ROTT" plus its terminator sorts after every key for
+// "ROTTERDAM", so seeking to it finds nothing. Dropping the terminator leaves a
+// byte string that IS a prefix of every encoded value starting with those
+// characters, which is exactly what a search box needs.
+//
+// Only ever a seek bound. Never write a key with this: an unterminated value
+// followed by a 16-byte id is ambiguous to decode.
+void EncodeOrderedStringPrefix(std::string* dst, const Slice& value);
+
 // Consume one encoded string from input, advancing it past the terminator.
 bool DecodeOrderedString(Slice* input, std::string* out);
 

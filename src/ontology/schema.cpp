@@ -131,6 +131,28 @@ const LinkTypeDef* Ontology::Link(const std::string& n) const {
   return nullptr;
 }
 
+const LinkTypeDef* Ontology::LinkOrInverse(const std::string& n,
+                                           bool* reverse) const {
+  // A link has two names because it has two ends. "arrives_at" is the question
+  // a Voyage asks; "arrivals" is the same edge seen from the Port. Making the
+  // caller supply the forward name plus a direction flag would mean the client
+  // has to re-derive the schema to ask a natural question, and a client that
+  // gets the flag wrong gets an empty result rather than an error.
+  for (const auto& l : links_) {
+    if (l.name == n) {
+      if (reverse != nullptr) *reverse = false;
+      return &l;
+    }
+  }
+  for (const auto& l : links_) {
+    if (!l.inverse.empty() && l.inverse == n) {
+      if (reverse != nullptr) *reverse = true;
+      return &l;
+    }
+  }
+  return nullptr;
+}
+
 const LinkTypeDef* Ontology::Link(LinkTypeId id) const {
   for (const auto& l : links_) {
     if (l.id == id) return &l;

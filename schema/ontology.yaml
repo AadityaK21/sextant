@@ -58,7 +58,13 @@ entity_types:
       to resolve, because it appears as "Rotterdam", "ROTTERDAM", "Port of
       Rotterdam" and "NLRTM" across four sources.
     properties:
-      name:        { id: 1, type: string,   title: true,   fuse: most_trusted }
+      # indexed because the search box searches the title property, and the
+      # day 12 planner reported "full scan of Port: no usable index for name"
+      # the first time it ran. That warning existing is the reason this is
+      # here: without a plan on the response, a slow search looks like a slow
+      # database rather than a missing index.
+      name:        { id: 1, type: string,   title: true,   indexed: true,
+                     fuse: most_trusted }
       locode:      { id: 2, type: string,   indexed: true, unique_hint: true,
                      fuse: most_trusted }
       alt_names:   { id: 3, type: "string[]", fuse: union }
@@ -74,7 +80,8 @@ entity_types:
       config - IMO is permanent for the life of the hull, MMSI is tied to the
       radio licence and is REASSIGNED on reflagging.
     properties:
-      name:          { id: 10, type: string, title: true, fuse: most_recent }
+      name:          { id: 10, type: string, title: true, indexed: true,
+                       fuse: most_recent }
       imo:           { id: 11, type: string, indexed: true, unique_hint: true }
       mmsi:          { id: 12, type: string, indexed: true }
       call_sign:     { id: 13, type: string }

@@ -14,8 +14,9 @@ namespace sextant::codec {
 // memcmp per key and terminates the scan the instant it leaves the range,
 // whereas a starts-with test would keep walking and discarding.
 
-RangeIterator::RangeIterator(std::unique_ptr<lsm::Iterator> iter, std::string until)
-    : iter_(std::move(iter)), prefix_(std::move(until)) {}
+RangeIterator::RangeIterator(std::unique_ptr<lsm::Iterator> iter, std::string until,
+                             lsm::ReadStats* stats)
+    : iter_(std::move(iter)), prefix_(std::move(until)), stats_(stats) {}
 
 bool RangeIterator::Valid() const {
   if (!iter_->Valid()) return false;
@@ -25,6 +26,10 @@ bool RangeIterator::Valid() const {
 
 void RangeIterator::Next() {
   ++scanned_;
+  // Counted here rather than by the caller so that keys_scanned means one
+  // thing: entries the engine actually stepped over. A query cannot inflate or
+  // deflate it by choosing when to stop reading.
+  if (stats_ != nullptr) ++stats_->keys_scanned;
   iter_->Next();
 }
 
@@ -118,25 +123,29 @@ Status Store::Open(const lsm::Options& options, const std::string& path,
 }
 
 std::unique_ptr<RangeIterator> Store::NewRangeIterator(const std::string& from,
-                                                       const std::string& until) {
-  auto iter = db_->NewIterator(lsm::ReadOptions{});
+                                                       const std::string& until,
+                                                       const ReadContext& ctx) {
+  auto iter = db_->NewIterator(ctx.ToReadOptions());
   iter->Seek(Slice(from));
-  return std::make_unique<RangeIterator>(std::move(iter), until);
+  return std::make_unique<RangeIterator>(std::move(iter), until, ctx.stats);
 }
 
-std::unique_ptr<RangeIterator> Store::NewPrefixIterator(const std::string& prefix) {
-  return NewRangeIterator(prefix, PrefixUpperBound(prefix));
+std::unique_ptr<RangeIterator> Store::NewPrefixIterator(const std::string& prefix,
+                                                        const ReadContext& ctx) {
+  return NewRangeIterator(prefix, PrefixUpperBound(prefix), ctx);
 }
 
 // --- entities ---
 
-Status Store::GetEntity(TypeId type, const Ulid& id, std::string* payload) {
-  return db_->Get(lsm::ReadOptions{}, Slice(EncodeEntityKey(type, id)), payload);
+Status Store::GetEntity(TypeId type, const Ulid& id, std::string* payload,
+                        const ReadContext& ctx) {
+  return db_->Get(ctx.ToReadOptions(), Slice(EncodeEntityKey(type, id)), payload);
 }
 
-std::unique_ptr<RangeIterator> Store::ScanEntities(TypeId type) {
+std::unique_ptr<RangeIterator> Store::ScanEntities(TypeId type,
+                                                   const ReadContext& ctx) {
   // Entity ids are ULIDs, so this yields entities in CREATION ORDER for free.
-  return NewPrefixIterator(EntityTypePrefix(type));
+  return NewPrefixIterator(EntityTypePrefix(type), ctx);
 }
 
 // --- raw records ---
@@ -152,7 +161,7 @@ Status Store::GetRawRecord(SourceId source, BatchId batch, RowSeq row,
 }
 
 std::unique_ptr<RangeIterator> Store::ScanRawBatch(SourceId source, BatchId batch) {
-  return NewPrefixIterator(RawBatchPrefix(source, batch));
+  return NewPrefixIterator(RawBatchPrefix(source, batch), ReadContext{});
 }
 
 // --- source records ---
@@ -170,7 +179,7 @@ Status Store::GetSourceRecord(SourceId source, uint64_t natural_key_hash,
 }
 
 std::unique_ptr<RangeIterator> Store::ScanSourceRecords(SourceId source) {
-  return NewPrefixIterator(SourceRecordPrefix(source));
+  return NewPrefixIterator(SourceRecordPrefix(source), ReadContext{});
 }
 
 // --- ingest manifests ---
@@ -182,21 +191,24 @@ Status Store::PutIngestManifest(SourceId source, BatchId batch,
 }
 
 std::unique_ptr<RangeIterator> Store::ScanIngest(SourceId source) {
-  return NewPrefixIterator(IngestPrefix(source));
+  return NewPrefixIterator(IngestPrefix(source), ReadContext{});
 }
 
 // --- graph traversal ---
 
-std::unique_ptr<RangeIterator> Store::ScanOutgoing(const Ulid& src, LinkTypeId type) {
-  return NewPrefixIterator(LinkOutPrefix(src, type));
+std::unique_ptr<RangeIterator> Store::ScanOutgoing(const Ulid& src, LinkTypeId type,
+                                                   const ReadContext& ctx) {
+  return NewPrefixIterator(LinkOutPrefix(src, type), ctx);
 }
 
-std::unique_ptr<RangeIterator> Store::ScanIncoming(const Ulid& dst, LinkTypeId type) {
-  return NewPrefixIterator(LinkInPrefix(dst, type));
+std::unique_ptr<RangeIterator> Store::ScanIncoming(const Ulid& dst, LinkTypeId type,
+                                                   const ReadContext& ctx) {
+  return NewPrefixIterator(LinkInPrefix(dst, type), ctx);
 }
 
-std::unique_ptr<RangeIterator> Store::ScanOutgoing(const Ulid& src) {
-  return NewPrefixIterator(LinkOutPrefix(src));
+std::unique_ptr<RangeIterator> Store::ScanOutgoing(const Ulid& src,
+                                                   const ReadContext& ctx) {
+  return NewPrefixIterator(LinkOutPrefix(src), ctx);
 }
 
 // --- the headline query ---
@@ -204,41 +216,62 @@ std::unique_ptr<RangeIterator> Store::ScanOutgoing(const Ulid& src) {
 std::unique_ptr<RangeIterator> Store::ScanTimeRange(LinkTypeId link_type,
                                                     const Ulid& anchor,
                                                     int64_t from_inclusive,
-                                                    int64_t to_exclusive) {
+                                                    int64_t to_exclusive,
+                                                    const ReadContext& ctx) {
   // Both bounds are just encoded keys. Because the timestamp is sign-flipped
   // big-endian and sits immediately after the anchor, the window is one
   // contiguous byte range - nothing outside it is ever touched.
   return NewRangeIterator(TimeIndexBound(link_type, anchor, from_inclusive),
-                          TimeIndexBound(link_type, anchor, to_exclusive));
+                          TimeIndexBound(link_type, anchor, to_exclusive), ctx);
 }
 
 // --- lineage ---
 
-std::unique_ptr<RangeIterator> Store::ScanProvenance(const Ulid& entity) {
-  return NewPrefixIterator(ProvenancePrefix(entity));
+std::unique_ptr<RangeIterator> Store::ScanProvenance(const Ulid& entity,
+                                                     const ReadContext& ctx) {
+  return NewPrefixIterator(ProvenancePrefix(entity), ctx);
 }
 
-std::unique_ptr<RangeIterator> Store::ScanProvenance(const Ulid& entity, PropId prop) {
-  return NewPrefixIterator(ProvenancePrefix(entity, prop));
+std::unique_ptr<RangeIterator> Store::ScanProvenance(const Ulid& entity, PropId prop,
+                                                     const ReadContext& ctx) {
+  return NewPrefixIterator(ProvenancePrefix(entity, prop), ctx);
 }
 
 // --- secondary index ---
 
 std::unique_ptr<RangeIterator> Store::LookupString(TypeId type, PropId prop,
-                                                   const Slice& value) {
-  return NewPrefixIterator(IndexPrefixString(type, prop, value));
+                                                   const Slice& value,
+                                                   const ReadContext& ctx) {
+  return NewPrefixIterator(IndexPrefixString(type, prop, value), ctx);
 }
 
 std::unique_ptr<RangeIterator> Store::RangeInt(TypeId type, PropId prop, int64_t from,
-                                               int64_t to_exclusive) {
+                                               int64_t to_exclusive,
+                                               const ReadContext& ctx) {
   return NewRangeIterator(IndexBoundInt(type, prop, from),
-                          IndexBoundInt(type, prop, to_exclusive));
+                          IndexBoundInt(type, prop, to_exclusive), ctx);
 }
 
 std::unique_ptr<RangeIterator> Store::RangeDouble(TypeId type, PropId prop, double from,
-                                                  double to_exclusive) {
+                                                  double to_exclusive,
+                                                  const ReadContext& ctx) {
   return NewRangeIterator(IndexBoundDouble(type, prop, from),
-                          IndexBoundDouble(type, prop, to_exclusive));
+                          IndexBoundDouble(type, prop, to_exclusive), ctx);
+}
+
+std::unique_ptr<RangeIterator> Store::ScanIndex(TypeId type, PropId prop,
+                                                const ReadContext& ctx) {
+  return NewPrefixIterator(IndexPrefix(type, prop), ctx);
+}
+
+std::unique_ptr<RangeIterator> Store::PrefixString(TypeId type, PropId prop,
+                                                   const Slice& value,
+                                                   const ReadContext& ctx) {
+  // An empty prefix would otherwise produce a bound of the property prefix
+  // with its last byte incremented, which is right, but saying so explicitly
+  // is cheaper than making a reader verify it.
+  if (value.empty()) return ScanIndex(type, prop, ctx);
+  return NewPrefixIterator(IndexPrefixStringPartial(type, prop, value), ctx);
 }
 
 // --- cross reference ---
@@ -263,7 +296,7 @@ Status Store::PutBlockingKey(uint64_t block_key_hash, SourceId source,
 }
 
 std::unique_ptr<RangeIterator> Store::ScanBlock(uint64_t block_key_hash) {
-  return NewPrefixIterator(BlockingPrefix(block_key_hash));
+  return NewPrefixIterator(BlockingPrefix(block_key_hash), ReadContext{});
 }
 
 Status Store::PutCandidate(double score, uint64_t pair_hash, const Slice& payload) {
@@ -271,11 +304,11 @@ Status Store::PutCandidate(double score, uint64_t pair_hash, const Slice& payloa
                   payload);
 }
 
-std::unique_ptr<RangeIterator> Store::ScanCandidates() {
+std::unique_ptr<RangeIterator> Store::ScanCandidates(const ReadContext& ctx) {
   // Scores are stored negated, so a forward scan is highest-score-first: the
   // pairs sitting closest to the decision boundary, which are the ones a human
   // should look at.
-  return NewPrefixIterator(CandidatePrefix());
+  return NewPrefixIterator(CandidatePrefix(), ctx);
 }
 
 }  // namespace sextant::codec

@@ -326,6 +326,12 @@ std::string IndexPrefixString(TypeId type, PropId prop, const Slice& value) {
   return k;
 }
 
+std::string IndexPrefixStringPartial(TypeId type, PropId prop, const Slice& value) {
+  std::string k = IndexPrefix(type, prop);
+  EncodeOrderedStringPrefix(&k, value);
+  return k;
+}
+
 std::string IndexBoundInt(TypeId type, PropId prop, int64_t value) {
   std::string k = IndexPrefix(type, prop);
   EncodeOrderedInt64(&k, value);

@@ -127,6 +127,10 @@ class Ontology {
   const LinkTypeDef* Link(const std::string& name) const;
   const LinkTypeDef* Link(LinkTypeId id) const;
 
+  // Resolve a link by either of its two names, reporting which end was named.
+  // "arrives_at" is forward; "arrivals", its declared inverse, is reverse.
+  const LinkTypeDef* LinkOrInverse(const std::string& name, bool* reverse) const;
+
   // Property ids are unique across the schema, so a provenance record can be
   // read without knowing which entity type it came from.
   const PropertyDef* Property(PropId id) const;

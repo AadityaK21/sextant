@@ -140,6 +140,10 @@ std::string EncodeIndexKeyDouble(TypeId type, PropId prop, double value,
 
 // Prefix for an exact-match lookup on a string value.
 std::string IndexPrefixString(TypeId type, PropId prop, const Slice& value);
+// Prefix for a starts-with search. The value is escaped but NOT terminated, so
+// the result really is a prefix of every matching key rather than a key that
+// sorts past all of them. See ordered.h.
+std::string IndexPrefixStringPartial(TypeId type, PropId prop, const Slice& value);
 // Prefix for the whole property, used as the start of a range scan.
 std::string IndexPrefix(TypeId type, PropId prop);
 // Lower bound for a numeric range scan.

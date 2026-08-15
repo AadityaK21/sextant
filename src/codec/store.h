@@ -38,11 +38,79 @@ namespace sextant::codec {
 
 using lsm::Status;
 
+// One request's view of the database.
+//
+// TWO THINGS TRAVEL TOGETHER BECAUSE THEY HAVE THE SAME LIFETIME
+//
+// A multi-hop traversal issues thousands of reads over several milliseconds.
+// Both of these have to be constant across all of them:
+//
+//   snapshot  so that hop 3 sees the same graph hop 1 did, rather than one an
+//             ingest has modified underneath it
+//   stats     so that the cost reported belongs to this request and not to
+//             whatever else the process happened to be doing
+//
+// Defaulted everywhere, so every caller written before the query engine
+// existed still compiles and still pays nothing.
+struct ReadContext {
+  const lsm::Snapshot* snapshot = nullptr;
+  lsm::ReadStats* stats = nullptr;
+
+  lsm::ReadOptions ToReadOptions() const {
+    lsm::ReadOptions opts;
+    opts.snapshot = snapshot;
+    opts.stats = stats;
+    return opts;
+  }
+};
+
+// Holds a snapshot and releases it. A traversal that returned early and leaked
+// one would pin every SSTable version it covers, and compaction would stop
+// reclaiming disk space with no error anywhere to explain why.
+class SnapshotHandle {
+ public:
+  SnapshotHandle() = default;
+  explicit SnapshotHandle(lsm::DB* db) : db_(db), snapshot_(db->GetSnapshot()) {}
+  ~SnapshotHandle() { reset(); }
+
+  SnapshotHandle(SnapshotHandle&& other) noexcept
+      : db_(other.db_), snapshot_(other.snapshot_) {
+    other.db_ = nullptr;
+    other.snapshot_ = nullptr;
+  }
+  SnapshotHandle& operator=(SnapshotHandle&& other) noexcept {
+    if (this != &other) {
+      reset();
+      db_ = other.db_;
+      snapshot_ = other.snapshot_;
+      other.db_ = nullptr;
+      other.snapshot_ = nullptr;
+    }
+    return *this;
+  }
+
+  SnapshotHandle(const SnapshotHandle&) = delete;
+  SnapshotHandle& operator=(const SnapshotHandle&) = delete;
+
+  const lsm::Snapshot* get() const { return snapshot_; }
+
+  void reset() {
+    if (db_ != nullptr && snapshot_ != nullptr) db_->ReleaseSnapshot(snapshot_);
+    db_ = nullptr;
+    snapshot_ = nullptr;
+  }
+
+ private:
+  lsm::DB* db_ = nullptr;
+  const lsm::Snapshot* snapshot_ = nullptr;
+};
+
 // Iterates a contiguous key range and stops at its end. Every traversal in the
 // system - link following, index lookup, time-window scan - is one of these.
 class RangeIterator {
  public:
-  RangeIterator(std::unique_ptr<lsm::Iterator> iter, std::string prefix);
+  RangeIterator(std::unique_ptr<lsm::Iterator> iter, std::string prefix,
+                lsm::ReadStats* stats = nullptr);
 
   bool Valid() const;
   void Next();
@@ -59,6 +127,7 @@ class RangeIterator {
   std::unique_ptr<lsm::Iterator> iter_;
   std::string prefix_;
   uint64_t scanned_ = 0;
+  lsm::ReadStats* stats_ = nullptr;  // not owned; outlives this iterator
 };
 
 class Store;
@@ -143,8 +212,13 @@ class Store {
     return EntityWriter(this, type, id);
   }
 
-  Status GetEntity(TypeId type, const Ulid& id, std::string* payload);
-  std::unique_ptr<RangeIterator> ScanEntities(TypeId type);
+  Status GetEntity(TypeId type, const Ulid& id, std::string* payload,
+                   const ReadContext& ctx = {});
+  std::unique_ptr<RangeIterator> ScanEntities(TypeId type, const ReadContext& ctx = {});
+
+  // A snapshot to pin for the life of a request. Taken once at the top of a
+  // query and passed down in a ReadContext.
+  SnapshotHandle NewSnapshot() { return SnapshotHandle(db_.get()); }
 
   // --- raw records: the far end of every lineage chain ---
   Status PutRawRecord(SourceId source, BatchId batch, RowSeq row, const Slice& bytes);
@@ -172,9 +246,12 @@ class Store {
   std::unique_ptr<RangeIterator> ScanIngest(SourceId source);
 
   // --- graph traversal ---
-  std::unique_ptr<RangeIterator> ScanOutgoing(const Ulid& src, LinkTypeId type);
-  std::unique_ptr<RangeIterator> ScanIncoming(const Ulid& dst, LinkTypeId type);
-  std::unique_ptr<RangeIterator> ScanOutgoing(const Ulid& src);
+  std::unique_ptr<RangeIterator> ScanOutgoing(const Ulid& src, LinkTypeId type,
+                                              const ReadContext& ctx = {});
+  std::unique_ptr<RangeIterator> ScanIncoming(const Ulid& dst, LinkTypeId type,
+                                              const ReadContext& ctx = {});
+  std::unique_ptr<RangeIterator> ScanOutgoing(const Ulid& src,
+                                              const ReadContext& ctx = {});
 
   // --- THE headline query ---
   //
@@ -183,19 +260,35 @@ class Store {
   // rejected. Iteration stops as soon as a key exceeds the window.
   std::unique_ptr<RangeIterator> ScanTimeRange(LinkTypeId link_type, const Ulid& anchor,
                                                int64_t from_inclusive,
-                                               int64_t to_exclusive);
+                                               int64_t to_exclusive,
+                                               const ReadContext& ctx = {});
 
   // --- lineage ---
-  std::unique_ptr<RangeIterator> ScanProvenance(const Ulid& entity);
-  std::unique_ptr<RangeIterator> ScanProvenance(const Ulid& entity, PropId prop);
+  std::unique_ptr<RangeIterator> ScanProvenance(const Ulid& entity,
+                                                const ReadContext& ctx = {});
+  std::unique_ptr<RangeIterator> ScanProvenance(const Ulid& entity, PropId prop,
+                                                const ReadContext& ctx = {});
 
   // --- secondary index ---
   std::unique_ptr<RangeIterator> LookupString(TypeId type, PropId prop,
-                                              const Slice& value);
+                                              const Slice& value,
+                                              const ReadContext& ctx = {});
   std::unique_ptr<RangeIterator> RangeInt(TypeId type, PropId prop, int64_t from,
-                                          int64_t to_exclusive);
+                                          int64_t to_exclusive,
+                                          const ReadContext& ctx = {});
   std::unique_ptr<RangeIterator> RangeDouble(TypeId type, PropId prop, double from,
-                                             double to_exclusive);
+                                             double to_exclusive,
+                                             const ReadContext& ctx = {});
+
+  // Every entity carrying this property at all, in index order.
+  std::unique_ptr<RangeIterator> ScanIndex(TypeId type, PropId prop,
+                                           const ReadContext& ctx = {});
+
+  // Starts-with search. A genuine range scan, not a scan with a filter: the
+  // encoded prefix bounds the range on both sides.
+  std::unique_ptr<RangeIterator> PrefixString(TypeId type, PropId prop,
+                                              const Slice& value,
+                                              const ReadContext& ctx = {});
 
   // --- cross reference: which entity did this source row land in? ---
   Status LookupCrossRef(SourceId source, uint64_t source_pk_hash, Ulid* entity);
@@ -205,7 +298,8 @@ class Store {
   std::unique_ptr<RangeIterator> ScanBlock(uint64_t block_key_hash);
 
   Status PutCandidate(double score, uint64_t pair_hash, const Slice& payload);
-  std::unique_ptr<RangeIterator> ScanCandidates();  // most uncertain first
+  // Most uncertain first.
+  std::unique_ptr<RangeIterator> ScanCandidates(const ReadContext& ctx = {});
 
  private:
   friend class EntityWriter;
@@ -213,9 +307,11 @@ class Store {
 
   // Range-scan helper: seek to `from`, stop when a key reaches `until`.
   std::unique_ptr<RangeIterator> NewRangeIterator(const std::string& from,
-                                                  const std::string& until);
+                                                  const std::string& until,
+                                                  const ReadContext& ctx);
   // Prefix scan, which is a range whose upper bound is the prefix successor.
-  std::unique_ptr<RangeIterator> NewPrefixIterator(const std::string& prefix);
+  std::unique_ptr<RangeIterator> NewPrefixIterator(const std::string& prefix,
+                                                   const ReadContext& ctx);
 
   std::unique_ptr<lsm::DB> db_;
 };

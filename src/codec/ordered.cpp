@@ -33,13 +33,17 @@ bool GetBigEndian64(Slice* input, uint64_t* out) {
 
 // --- strings ---------------------------------------------------------------
 
-void EncodeOrderedString(std::string* dst, const Slice& value) {
-  dst->reserve(dst->size() + value.size() + 2);
+void EncodeOrderedStringPrefix(std::string* dst, const Slice& value) {
+  dst->reserve(dst->size() + value.size() + 1);
   for (size_t i = 0; i < value.size(); ++i) {
     const char c = value[i];
     dst->push_back(c);
     if (c == kEscape) dst->push_back(kEscaped);
   }
+}
+
+void EncodeOrderedString(std::string* dst, const Slice& value) {
+  EncodeOrderedStringPrefix(dst, value);
   dst->push_back(kEscape);
   dst->push_back(kTerminator);
 }
