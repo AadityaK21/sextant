@@ -27,6 +27,8 @@ C++20 · React · no storage dependencies
 | **Days 6-7** - ontology, transforms, three connectors | ✅ | 314 tests green |
 | **Day 8** - normalization, blocking, RR/PC | ✅ | 350 tests green |
 | **Days 9-10** - scoring, clustering, fusion | ✅ | 370 tests green |
+| **Day 11** - link resolution, lineage, round-trip test | ✅ | 376 tests green |
+| Day 12 - query engine, HTTP API | ⬜ | |
 | Days 11-12 - lineage, query engine, HTTP API | ⬜ | |
 | Days 13-14 - React frontend | ⬜ | |
 
@@ -68,6 +70,13 @@ with no network and no downloads.
 ./build/src/cli/sextant block                       # blocking + RR/PC report
 ./build/src/cli/sextant eval                        # precision, recall, F1
 ./build/src/cli/sextant resolve                     # cluster, fuse, write entities
+./build/src/cli/sextant explain                     # the lineage round-trip
+```
+
+```
+lineage round trip
+  1187 entities, 4201 properties
+  4201 verified, 0 failed  ->  100.00%
 ```
 
 On Windows, MSVC is a multi-config generator, so the binary lands one directory
@@ -126,9 +135,9 @@ not a filter - it is a range scan over a big-endian timestamp suffix
    web/            React - browse entities, links, lineage      NOT BUILT (days 13-14)
    src/api/        HTTP + JSON                                  NOT BUILT (day 12)
    src/query/      planner · index selection · traversal        NOT BUILT (day 12)
-   src/lineage/    provenance at every fusion decision          NOT BUILT (day 11)
   ─────────────────────────────────────────────────────────────────────────────────
-   src/resolve/    normalize · block · score · cluster · fuse   built
+   src/lineage/    provenance reader · round-trip verification  built
+   src/resolve/    normalize · block · score · cluster · fuse · link   built
    src/cli/        ingest · stats · block · eval · resolve · lineage · schema  built
    src/connectors/ CSV · REST/JSON · Postgres                   built
    src/ontology/   declarative types, links and transforms      built
@@ -205,7 +214,10 @@ what the engine does when durability is actually required.
 | | Veto-constrained clustering measured against plain union-find: precision **1.000 vs 0.973**, 10 merges refused |
 | | Three pairs where the MMSI matches exactly and the answer is still no - an IMO conflict is a rule, not a weight to be outvoted |
 | | 459 records resolve to 187 entities, dedup ratio **0.593**, every property carrying provenance with its rejected alternatives |
-| Lineage | *day 11* - round-trip verified for 100% of resolved properties |
+| Lineage | **Round-trip verified for 100% of 4,201 resolved properties** across 1,187 entities - read the provenance, fetch the raw row, replay the chain, assert equality |
+| | The round trip has a negative control: corrupt a provenance record and it must go red, because a checker that cannot fail is not a check |
+| | "Why does this say Rotterdam?" is two point lookups, both O(log n) - no scan, no join, no separate lineage store |
+| | The quarter-query over resolved data: **24 arrivals returned, 24 keys scanned** - a range scan, not a filter |
 
 ### The result that matters most
 
@@ -214,6 +226,25 @@ what the engine does when durability is actually required.
 > chain by ID, and assert the result equals the stored value.
 
 Lineage that isn't verified is a comment. This makes it an invariant.
+
+**It passes at 100% over 4,201 properties**, and it has a negative control:
+`TheRoundTripDetectsACorruptedProvenanceRecord` rewrites a stored provenance
+record to name a row that does not exist and asserts the check goes red. A
+round trip that cannot fail would look exactly like a perfect one.
+
+```
+$ sextant explain --entity 01M02TVE9E2CDS4ZT8EQ3NGVQ4 --type Port
+
+name = Rotterdam
+  rule       most_trusted (confidence 0.95)
+  origin     unlocode batch 1 row 2, column NameWoDiacritics
+  raw cell   "Rotterdam"
+  chain      trim -> collapse_ws -> title_case
+  replay     "Rotterdam"  MATCHES
+  rejected
+    "ROTTERDAM" from source 1 row 1 (Main Port Name)
+      lower source trust (0.80 < 0.95)
+```
 
 ---
 

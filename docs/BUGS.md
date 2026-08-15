@@ -499,6 +499,80 @@ as a question rather than an assertion when it goes red.
 
 ---
 
+## A negative control that did not fail, and was right not to          2026-08-15
+
+**Symptom.** The lineage round trip reported 100% on its first run. The plan
+had said in bold that it *will* find something, so I did not believe it and
+wrote a negative control: break `title_case`, replay a database written before
+the break, expect failures.
+
+It still reported 100%. That looked like the checker was doing nothing at all.
+
+**Root cause.** The checker was fine. Fusion picks the winning value by source
+trust, and for `name` that is always UN/LOCODE - whose `NameWoDiacritics`
+column is already in title case. Running `title_case` over "Rotterdam" produces
+"Rotterdam" whether the function works or not, so breaking it genuinely changed
+nothing about any stored value.
+
+**Fix.** Break `first_char` instead, which turns the World Port Index's "Large"
+into "L" and is fed by no other source. 144 failures, each naming the entity,
+the raw cell, the replayed value and the stored one.
+
+**Lesson.** A negative control that does not fail is a statement about the
+control, not necessarily about the thing under test - but you cannot tell which
+without a second one. The test file now carries this story above the round trip,
+because "100%" is the most dangerous number in the project and the next person
+to read it deserves to know it was checked.
+
+---
+
+## Records that were never compared were never created          2026-08-15
+
+**Symptom.** `sextant resolve` reported `0 link references -> 0 edges`. The
+graph was empty, so the headline time-range query had nothing to scan.
+
+**Root cause.** Clustering seeded its union-find from the endpoints of the
+candidate PAIRS. A record that blocking never proposed a pair for therefore
+never entered any cluster, never became an entity, and disappeared. Voyages hit
+this every time - they produce no blocking keys at all, because they are
+resolved through their links rather than by comparing attributes.
+
+It was also silently losing any Port or Vessel that happened to be blocked with
+nothing: 459 records produced 187 entities, and eight of the missing ones were
+every Voyage in the corpus.
+
+**Fix.** Both clustering functions take the full record list and seed from it,
+so anything with no edges becomes a singleton cluster rather than nothing at all.
+
+**Lesson.** The bug hid because the counts looked plausible - a dedup ratio of
+0.59 is exactly what heavy merging looks like. It only surfaced downstream, when
+a completely different subsystem reported zero. Worth asking of any pipeline
+stage: what happens to an input this stage has no opinion about?
+
+---
+
+## The port calls referenced vessels that no longer existed          2026-08-15
+
+**Symptom.** With the graph populated, `arrives_at` and `departs_from` resolved
+240 edges each and `operated_by` resolved none. All 8 references were reported
+unresolved.
+
+**Root cause.** `eval/make_corpus.py` regenerates the vessel feeds with fresh
+MMSIs, and `port_calls.json` was the one file it did not regenerate - it was
+still the hand-written original from day 7, naming MMSIs like 230123456 that
+had not existed since the corpus grew. The links pointed at nothing, and
+pointing at nothing is exactly what "unresolved" means, so the pipeline was
+reporting the truth.
+
+**Fix.** The generator builds port calls too, drawing both endpoints from the
+locodes and MMSIs it just emitted, so a reference cannot name something absent.
+
+**Lesson.** A generator that produces four of five related files leaves the
+fifth as a landmine, and it will not go off until something downstream tries to
+join across them. If data is generated, generate all of it.
+
+---
+
 <!-- Add entries as you go. Suggested candidates from the plan:
      - the first tombstone resurrection you hit once SSTables land (day 2-4)
      - whatever the lineage round-trip test catches on day 11 (it will catch
