@@ -149,10 +149,16 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
     cache_handle = block_cache->Lookup(cache_key);
     if (cache_handle != nullptr) {
       block = reinterpret_cast<Block*>(block_cache->Value(cache_handle));
+      // Counted separately from blocks_read on purpose. A query that reports
+      // 40 blocks_read on a cold cache and 0 on a warm one is telling the
+      // truth twice; collapsing both into one number would hide which run was
+      // measured and make the figure impossible to compare.
+      if (options.stats != nullptr) ++options.stats->block_cache_hits;
     } else {
       BlockContents contents;
       s = ReadBlock(table->rep_->file.get(), options, handle, &contents);
       if (!s.ok()) return NewErrorIterator(s);
+      if (options.stats != nullptr) ++options.stats->blocks_read;
       block = new Block(contents);
       if (contents.cachable && options.fill_cache) {
         cache_handle = block_cache->Insert(cache_key, block, block->size(),
@@ -163,6 +169,7 @@ Iterator* Table::BlockReader(void* arg, const ReadOptions& options,
     BlockContents contents;
     s = ReadBlock(table->rep_->file.get(), options, handle, &contents);
     if (!s.ok()) return NewErrorIterator(s);
+    if (options.stats != nullptr) ++options.stats->blocks_read;
     block = new Block(contents);
   }
 
@@ -206,6 +213,7 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
     if (handle.DecodeFrom(&v).ok() &&
         !rep_->filter->KeyMayMatch(handle.offset(), ExtractUserKey(k))) {
       ++rep_->filter_rejections;
+      if (options.stats != nullptr) ++options.stats->bloom_rejections;
       return Status::OK();  // definitely not present; handle_result never runs
     }
   }

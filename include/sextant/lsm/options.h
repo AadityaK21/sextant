@@ -51,6 +51,44 @@ struct Options {
   const BloomFilterPolicy* filter_policy = nullptr;
 };
 
+// Per-read cost accounting.
+//
+// WHY THIS IS NOT THE GLOBAL Stats STRUCT
+//
+// DB::GetStats() returns process-lifetime totals. A query could diff them
+// before and after and call the difference its own cost, and that is what a
+// first attempt did - but the numbers were wrong the moment a second request
+// ran concurrently, because a background compaction and another reader both
+// move the same counters. The bug does not show up in a single-threaded test
+// and does show up under load, which is the worst combination.
+//
+// So a read carries its own sink. The engine increments through the pointer
+// when it is set and does nothing when it is null, and the cost reported by a
+// query is that query's cost even with a compaction running underneath it.
+//
+// Not atomic, and deliberately so: one ReadStats belongs to one request, and
+// one request is served by one thread. Sharing a ReadStats across threads is a
+// caller error, not something to pay for on every block read.
+struct ReadStats {
+  uint64_t keys_scanned = 0;      // entries the iterators actually stepped over
+  uint64_t blocks_read = 0;       // data blocks decoded, cache misses only
+  uint64_t block_cache_hits = 0;  // blocks that were already in memory
+  uint64_t bloom_rejections = 0;  // lookups a filter answered without any I/O
+  uint64_t range_rejections = 0;  // files skipped on their key range alone
+  uint64_t sstables_probed = 0;
+  uint64_t memtable_hits = 0;
+
+  void Add(const ReadStats& other) {
+    keys_scanned += other.keys_scanned;
+    blocks_read += other.blocks_read;
+    block_cache_hits += other.block_cache_hits;
+    bloom_rejections += other.bloom_rejections;
+    range_rejections += other.range_rejections;
+    sstables_probed += other.sstables_probed;
+    memtable_hits += other.memtable_hits;
+  }
+};
+
 struct ReadOptions {
   bool verify_checksums = true;
 
@@ -66,6 +104,10 @@ struct ReadOptions {
   // a pinned sequence number a concurrent ingest could show an entity at hop 1
   // that has been merged away by hop 2 - inconsistent results, no error.
   const Snapshot* snapshot = nullptr;
+
+  // Where to record what this read cost. Not owned, and null by default so
+  // that every existing caller keeps working and pays nothing.
+  ReadStats* stats = nullptr;
 };
 
 struct WriteOptions {

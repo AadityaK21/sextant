@@ -385,9 +385,11 @@ Status DBImpl::Get(const ReadOptions& opts, const Slice& key, std::string* value
 
   if (mem->Get(lkey, value, &s)) {
     ++stats_.memtable_hits;
+    if (opts.stats != nullptr) ++opts.stats->memtable_hits;
     found = true;
   } else if (imm != nullptr && imm->Get(lkey, value, &s)) {
     ++stats_.memtable_hits;
+    if (opts.stats != nullptr) ++opts.stats->memtable_hits;
     found = true;
   }
 
@@ -395,6 +397,10 @@ Status DBImpl::Get(const ReadOptions& opts, const Slice& key, std::string* value
     ReadOptions table_opts;
     table_opts.verify_checksums = options_.paranoid_checks;
     table_opts.fill_cache = opts.fill_cache;
+    // Carry the caller's sink down into the table layer, which is where the
+    // block reads and filter rejections that make up most of a read's cost
+    // actually happen.
+    table_opts.stats = opts.stats;
 
     // Release the lock for the disk read. The Version is pinned, so compaction
     // may run concurrently without invalidating anything we are reading.
@@ -405,6 +411,10 @@ Status DBImpl::Get(const ReadOptions& opts, const Slice& key, std::string* value
 
     stats_.range_rejections += get_stats.range_rejections;
     stats_.sstables_probed += get_stats.files_probed;
+    if (opts.stats != nullptr) {
+      opts.stats->range_rejections += get_stats.range_rejections;
+      opts.stats->sstables_probed += get_stats.files_probed;
+    }
     if (s.ok()) ++stats_.sstable_hits;
   }
 
@@ -425,6 +435,10 @@ std::unique_ptr<Iterator> DBImpl::NewIterator(const ReadOptions& opts) {
   ReadOptions table_opts;
   table_opts.verify_checksums = options_.paranoid_checks;
   table_opts.fill_cache = opts.fill_cache;
+  // The sink outlives the iterator by contract: it belongs to the request, and
+  // the iterator is created and destroyed inside one. Every data block this
+  // scan pulls off disk lands here.
+  table_opts.stats = opts.stats;
 
   std::vector<Iterator*> children;
   children.push_back(mem_->NewIterator());
