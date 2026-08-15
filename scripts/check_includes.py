@@ -60,7 +60,16 @@ ROOTS = ["src", "include", "tests", "bench"]
 # Files whose include block is guarded by #if/#else and must not be reordered.
 # env.cpp mixes POSIX and Win32 headers; sorting them across the conditional
 # once produced "#else without #if".
-SKIP_FIX = {"src/lsm/env.cpp"}
+# Files whose include block must not be reordered, because it spans a
+# preprocessor conditional. Sorting across an #if/#else moves the #else above
+# the #if and the file stops compiling with an error that points nowhere useful.
+# This has now happened twice; a file lands here the first time it does.
+SKIP_FIX = {
+    "src/lsm/env.cpp",
+    "tests/lineage/test_lineage.cpp",
+    "tests/resolve/test_blocking.cpp",
+    "tests/resolve/test_resolution.cpp",
+}
 
 
 def sources():

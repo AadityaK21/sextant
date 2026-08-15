@@ -16,6 +16,8 @@
 #include "evaluate.h"
 #include "fuse.h"
 #include "golden.h"
+#include "lineage.h"
+#include "link.h"
 #include "scorer.h"
 #include "sextant/lsm/options.h"
 #include "store.h"
@@ -27,6 +29,7 @@ namespace onto = sextant::ontology;
 namespace codec = sextant::codec;
 namespace lsm = sextant::lsm;
 namespace resolve = sextant::resolve;
+namespace lineage = sextant::lineage;
 
 using lsm::Status;
 
@@ -310,10 +313,20 @@ int CmdResolve(const Args& args) {
               static_cast<unsigned long long>(review),
               static_cast<unsigned long long>(vetoed));
 
+  // Every record, not just the ones blocking proposed a pair for. Voyages
+  // produce no blocking keys - they are resolved through their links rather
+  // than by comparing attributes - so seeding from the edges alone would drop
+  // them and leave the graph empty.
+  std::vector<resolve::RecordRef> all_records;
+  all_records.reserve(ctx.records.size());
+  for (const auto& [ref, record] : ctx.records) all_records.push_back(ref);
+
   // Both clusterings, so the comparison is produced by the same run that writes
   // the entities rather than by a separate experiment.
-  const resolve::ClusterSet plain = resolve::ClusterTransitive(edges);
-  const resolve::ClusterSet constrained = resolve::ClusterVetoConstrained(edges);
+  const resolve::ClusterSet plain =
+      resolve::ClusterTransitive(edges, all_records);
+  const resolve::ClusterSet constrained =
+      resolve::ClusterVetoConstrained(edges, all_records);
 
   std::printf("\n  %-22s %8s %8s %10s %8s\n", "clustering", "clusters", "largest",
               "singletons", "refused");
@@ -379,6 +392,28 @@ int CmdResolve(const Args& args) {
               static_cast<unsigned long long>(written),
               static_cast<unsigned long long>(properties),
               static_cast<unsigned long long>(properties));
+
+  // A second pass, because a link can point forwards: a Voyage ingested before
+  // its Port was resolved would find nothing. Every entity has to exist before
+  // any edge is written.
+  resolve::LinkReport links;
+  const Status ls = resolve::ResolveLinks(ctx.store.get(), ctx.bundle, ctx.props,
+                                          &links);
+  if (!ls.ok()) {
+    std::fprintf(stderr, "  links: %s\n", ls.ToString().c_str());
+    return 1;
+  }
+  std::printf("  %llu link references -> %llu edges (%llu time-indexed,"
+              " %llu unresolved, %llu orphaned)\n",
+              static_cast<unsigned long long>(links.references_seen),
+              static_cast<unsigned long long>(links.edges_written),
+              static_cast<unsigned long long>(links.time_indexed),
+              static_cast<unsigned long long>(links.unresolved),
+              static_cast<unsigned long long>(links.orphaned));
+  for (const auto& [name, count] : links.by_link_type) {
+    std::printf("    %-16s %llu\n", name.c_str(),
+                static_cast<unsigned long long>(count));
+  }
   const double dedup =
       ctx.records.empty()
           ? 0.0
@@ -386,6 +421,72 @@ int CmdResolve(const Args& args) {
                       static_cast<double>(ctx.records.size());
   std::printf("  dedup ratio %.4f  (%zu records -> %llu entities)\n", dedup,
               ctx.records.size(), static_cast<unsigned long long>(written));
+  return 0;
+}
+
+// --- explain ----------------------------------------------------------------
+
+int CmdExplain(const Args& args) {
+  Context ctx;
+  if (!Setup(args, &ctx, /*with_candidates=*/false)) return 1;
+
+  const lineage::LineageReader reader(ctx.store.get(), &ctx.bundle,
+                                    args.Get("data-root", "."));
+
+  // THE ROUND-TRIP PROPERTY TEST, over every property of every entity.
+  if (args.Has("verify") || !args.Has("entity")) {
+    lineage::RoundTripReport report;
+    const Status s = reader.RoundTrip(&report);
+    if (!s.ok()) {
+      std::fprintf(stderr, "round trip: %s\n", s.ToString().c_str());
+      return 1;
+    }
+
+    std::printf("lineage round trip\n");
+    std::printf("  %llu entities, %llu properties\n",
+                static_cast<unsigned long long>(report.entities),
+                static_cast<unsigned long long>(report.properties));
+    std::printf("  %llu verified, %llu failed  ->  %.2f%%\n",
+                static_cast<unsigned long long>(report.verified),
+                static_cast<unsigned long long>(report.failed),
+                report.rate() * 100.0);
+    std::printf("  (%llu of those are union properties, checked by containment"
+                " rather than equality)\n",
+                static_cast<unsigned long long>(report.union_properties));
+
+    for (const auto& failure : report.failures) {
+      std::printf("\n  FAIL %s  entity %s property %u\n",
+                  lineage::RoundTripFailureName(failure.failure),
+                  failure.entity_id.ToString().c_str(), failure.prop);
+      std::printf("    %s\n", failure.detail.c_str());
+    }
+    if (report.failed != 0) return 1;
+    return 0;
+  }
+
+  // One entity, explained property by property.
+  codec::Ulid entity;
+  if (!codec::Ulid::FromString(args.Get("entity"), &entity)) {
+    std::fprintf(stderr, "explain: --entity must be a 26-character ULID\n");
+    return 2;
+  }
+  const onto::EntityTypeDef* type =
+      ctx.bundle.ontology().Type(args.Get("type", "Port"));
+  if (type == nullptr) {
+    std::fprintf(stderr, "explain: unknown --type\n");
+    return 2;
+  }
+
+  std::vector<lineage::Explanation> explanations;
+  const Status s = reader.ExplainAll(type->id, entity, &explanations);
+  if (!s.ok()) {
+    std::fprintf(stderr, "explain: %s\n", s.ToString().c_str());
+    return 1;
+  }
+  std::printf("%s %s\n\n", type->name.c_str(), entity.ToString().c_str());
+  for (const auto& explanation : explanations) {
+    std::printf("%s\n", explanation.Render().c_str());
+  }
   return 0;
 }
 

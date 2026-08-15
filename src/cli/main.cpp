@@ -118,6 +118,12 @@ usage:
       Score every candidate pair, cluster it both ways, and write the
       resolved entities with their provenance.
 
+  sextant explain [--db DIR] [--entity ULID --type NAME] [--verify]
+      With no --entity, runs the lineage round-trip over every property of
+      every entity: read the provenance, fetch the raw row it names, replay
+      the transform chain, assert the result equals the stored value.
+      With --entity, shows the full chain for one entity's properties.
+
   sextant lineage --source ID --batch N --row N [--db DIR]
       Print the verbatim source row a lineage reference points at.
 
@@ -584,15 +590,17 @@ int main(int argc, char** argv) {
   if (args.command == "ingest") return CmdIngest(args);
   if (args.command == "stats") return CmdStats(args);
   if (args.command == "block") return CmdBlock(args);
-  if (args.command == "eval" || args.command == "resolve") {
+  if (args.command == "eval" || args.command == "resolve" ||
+      args.command == "explain") {
     // These two live in resolve_commands.cpp - between them they are longer
     // than the rest of the CLI put together.
     sextant::cli::Args forwarded;
     forwarded.command = args.command;
     forwarded.flags = args.flags;
     forwarded.positional = args.positional;
-    return args.command == "eval" ? sextant::cli::CmdEval(forwarded)
-                                  : sextant::cli::CmdResolve(forwarded);
+    if (args.command == "eval") return sextant::cli::CmdEval(forwarded);
+    if (args.command == "resolve") return sextant::cli::CmdResolve(forwarded);
+    return sextant::cli::CmdExplain(forwarded);
   }
   if (args.command == "lineage") return CmdLineage(args);
 

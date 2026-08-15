@@ -27,4 +27,8 @@ struct Args {
 int CmdEval(const Args& args);
 int CmdResolve(const Args& args);
 
+// Show the full chain from a resolved value back to the raw source row, and
+// run the round-trip property test over every property of every entity.
+int CmdExplain(const Args& args);
+
 }  // namespace sextant::cli

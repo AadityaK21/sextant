@@ -104,3 +104,22 @@ sextant_add_resolve_test(test_geohash    resolve/test_geohash.cpp)
 sextant_add_resolve_test(test_blocking   resolve/test_blocking.cpp)
 sextant_add_resolve_test(test_similarity resolve/test_similarity.cpp)
 sextant_add_resolve_test(test_resolution resolve/test_resolution.cpp)
+
+# --- days 11-12: lineage ---
+function(sextant_add_lineage_test name)
+  add_executable(${name} ${ARGN})
+  target_link_libraries(${name} PRIVATE sextant_lineage sextant_warnings
+                                        GTest::gtest_main)
+  target_include_directories(${name} PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/lineage
+    ${CMAKE_SOURCE_DIR}/src/resolve
+    ${CMAKE_SOURCE_DIR}/src/connectors
+    ${CMAKE_SOURCE_DIR}/src/ontology
+    ${CMAKE_SOURCE_DIR}/src/codec
+    ${CMAKE_SOURCE_DIR}/src/lsm
+    ${CMAKE_SOURCE_DIR}/include)
+  target_compile_definitions(${name} PRIVATE SEXTANT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 60)
+endfunction()
+
+sextant_add_lineage_test(test_lineage lineage/test_lineage.cpp)

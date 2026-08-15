@@ -9,6 +9,7 @@ add_library(sextant_resolve
   evaluate.cpp
   cluster.cpp
   fuse.cpp
+  link.cpp
 )
 
 target_include_directories(sextant_resolve

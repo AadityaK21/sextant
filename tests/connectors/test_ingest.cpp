@@ -319,7 +319,11 @@ TEST_F(IngestTest, PortCallsBecomeVoyagesWithThreeUnresolvedEdges) {
     EXPECT_EQ("portAreaDetails[0].ata", ata->origin.column);
     // Finnish local time, normalised to UTC. A timestamp that kept its offset
     // would put the call in the wrong quarter for anyone querying in UTC.
-    EXPECT_NE(std::string::npos, ata->raw_value.find("+03:00"));
+    // The feed reports +03:00 in summer and +02:00 in winter, so the assertion
+    // is that an offset was present and is gone, not which one it was.
+    EXPECT_TRUE(ata->raw_value.find("+03:00") != std::string::npos ||
+                ata->raw_value.find("+02:00") != std::string::npos)
+        << ata->raw_value;
     EXPECT_NE(std::string::npos, ata->value.ToDisplay().find('Z'));
   }
   EXPECT_GE(voyages, 5);
