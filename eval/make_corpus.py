@@ -535,6 +535,70 @@ def build_vessels():
     return details, ais, truth
 
 
+def build_port_calls(port_locodes, vessel_mmsis, count=1000):
+    """Port calls, which ARE the Voyage entity.
+
+    These exist to give the graph something to traverse and the time index
+    something to select. Each call references a real vessel MMSI and two real
+    UN/LOCODEs, because a link to an identifier that is not in the data resolves
+    to nothing - which is exactly the bug that made this function necessary:
+    the hand-written port_calls.json survived a corpus regeneration and went on
+    naming MMSIs that no longer existed.
+
+    Arrivals are spread across a year so that "everything through this port last
+    quarter" selects a genuine subset rather than everything or nothing.
+    """
+    calls = []
+    for index in range(count):
+        arrival_day = index % 365
+        # Finnish local time with an offset, the way Digitraffic reports it.
+        offset = "+03:00" if 90 <= arrival_day <= 300 else "+02:00"
+        month = arrival_day // 31 + 1
+        day = arrival_day % 28 + 1
+        hour = (index * 7) % 24
+
+        # Traffic is skewed, because real traffic is: a handful of hub ports
+        # handle most calls and the long tail handles a few each. A uniform
+        # spread would put one arrival per port per quarter, which makes the
+        # time-range query technically correct and useless as a demonstration -
+        # a range scan returning one row proves nothing about range scans.
+        hubs = max(1, len(port_locodes) // 8)
+        if index % 5 != 0:
+            to_port = port_locodes[index % hubs]
+        else:
+            to_port = port_locodes[index % len(port_locodes)]
+        from_port = port_locodes[(index * 13 + 5) % len(port_locodes)]
+        if from_port == to_port:
+            from_port = port_locodes[(index + 1) % len(port_locodes)]
+
+        detail = {
+            "ata": f"2026-{month:02d}-{day:02d}T{hour:02d}:15:00{offset}",
+            "atd": f"2026-{month:02d}-{day:02d}T{(hour + 9) % 24:02d}:40:00{offset}",
+        }
+        # A few calls with no arrival recorded at all, and a few with a
+        # malformed one, because both occur in the real feed.
+        #
+        # Offset off zero deliberately: the first record in a sample file is the
+        # one people read, and starting with a degenerate case makes the format
+        # look wrong. It also makes any test that grabs the first record
+        # accidentally test the exception rather than the rule.
+        if index % 40 == 13:
+            details = []
+        elif index % 37 == 21:
+            details = [{"ata": "not a timestamp", "atd": None}]
+        else:
+            details = [detail]
+
+        calls.append({
+            "portCallId": 3120000 + index,
+            "portToVisit": to_port,
+            "prevPort": from_port,
+            "mmsi": vessel_mmsis[index % len(vessel_mmsis)],
+            "portAreaDetails": details,
+        })
+    return {"portCalls": calls}
+
+
 def write_json(path, rows):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -626,12 +690,16 @@ def main():
     wpi_rows, unlocode_rows, digitraffic_rows, port_truth = build_ports()
     details, ais, vessel_truth = build_vessels()
 
+    port_calls = build_port_calls([row["locode"] for row in digitraffic_rows],
+                                  [row["mmsi"] for row in details])
+
     written = [
         write_wpi(wpi_rows),
         write_unlocode(unlocode_rows),
         write_digitraffic_ports(digitraffic_rows),
         write_json(os.path.join(SNAP, "digitraffic", "vessel_details.json"), details),
         write_json(os.path.join(SNAP, "digitraffic", "ais_vessels.json"), ais),
+        write_json(os.path.join(SNAP, "digitraffic", "port_calls.json"), port_calls),
     ]
     for path in written:
         print(f"  {os.path.relpath(path, ROOT)}")
@@ -647,7 +715,8 @@ def main():
           f"{vessel_pairs} pairs, {vessel_matches} matches")
     print(f"\n  {len(wpi_rows)} wpi, {len(unlocode_rows)} unlocode, "
           f"{len(digitraffic_rows)} digitraffic ports")
-    print(f"  {len(details)} vessel_details, {len(ais)} ais_vessels")
+    print(f"  {len(details)} vessel_details, {len(ais)} ais_vessels, "
+          f"{len(port_calls['portCalls'])} port_calls")
 
 
 if __name__ == "__main__":
