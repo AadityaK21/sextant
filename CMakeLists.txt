@@ -62,6 +62,7 @@ add_subdirectory(src/codec)
 add_subdirectory(src/ontology)
 add_subdirectory(src/connectors)
 add_subdirectory(src/resolve)
+add_subdirectory(src/lineage)
 add_subdirectory(src/cli)
 
 if(SEXTANT_BUILD_TESTS)
