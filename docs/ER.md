@@ -207,12 +207,155 @@ covering it.
 
 ---
 
-## 6. Still to come
+## 6. Scoring: precision, recall and F1
 
-| | |
-|---|---|
-| Day 9 | Jaro-Winkler, token Jaccard, haversine features; the scorer; precision, recall and F1 on a held-out split |
-| Day 10 | Plain union-find against veto-constrained union-find, both measured; fusion rules |
+```
+./build/src/cli/sextant eval
+```
 
-The comparison in day 10 is the interesting one, and this document exists so
-that it has somewhere to land.
+The weights in [`schema/resolver.yaml`](../schema/resolver.yaml) were fitted by
+coordinate ascent on the **training split only**. Every number below is measured
+on the held-out 20% that the tuner never saw.
+
+| | Pairs | TP | FP | FN | Precision | Recall | **F1** |
+|---|---|---|---|---|---|---|---|
+| **Ports, held-out** | 266 | 56 | 1 | 0 | 0.9825 | 1.0000 | **0.9912** |
+| Ports, training | 1,104 | 262 | 2 | 1 | 0.9924 | 0.9962 | 0.9943 |
+| **Vessels, held-out** | 55 | 10 | 0 | 0 | 1.0000 | 1.0000 | **1.0000** |
+| Vessels, training | 217 | 27 | 0 | 0 | 1.0000 | 1.0000 | 1.0000 |
+
+Tuning moved ports from 0.9501 to 0.9943 on training in two passes, and it
+converged rather than hitting the iteration cap. The plan's target was F1 > 0.90
+on the holdout.
+
+### Only a MATCH counts as a positive
+
+A pair in the REVIEW band counts as a **non-match** for the metric. That is the
+honest accounting: a pair a human has not looked at is not a resolved pair, and
+a resolver that pushes everything difficult into review should not be rewarded
+for it. One true port pair sits in review under the shipped weights and is
+counted as a miss.
+
+### Why the vessel numbers are perfect, and why that is not impressive
+
+When both records carry an IMO, one exact comparison settles it - an IMO is
+assigned to the hull for life. The only interesting vessel cases are the three
+MMSI reassignments, and those are handled by a veto rather than by the scorer.
+So a perfect vessel F1 says the veto works, not that the scorer is clever. The
+port task is the one carrying real signal, and it is the number to quote.
+
+### What tuning actually changed
+
+Two weights moved: `name_exact` 3.0 to 5.0, and `country_match` 1.0 to 3.0.
+
+The reason is visible in the data rather than mysterious. The Digitraffic port
+feed carries **no coordinates at all**, so a pair where neither record has a
+UN/LOCODE scores on name and country alone. At the starting weights that
+totalled 4.0 and landed in the review band. Raising them is safe because a
+country *disagreement* is already a veto - the weight only ever fires on pairs
+that agree, so it is not being asked to outvote contrary evidence.
+
+---
+
+## 7. Clustering: the comparison that justifies the design
+
+```
+./build/src/cli/sextant resolve
+```
+
+```
+459 source records, 470 candidate pairs
+365 match, 2 review, 101 vetoed
+
+clustering             clusters  largest singletons  refused
+transitive union-find       182        6          6        -
+veto-constrained            187        5          6       10
+```
+
+Measured over the pairs each clustering **implies** - every pair of records
+sharing a cluster - rather than over the edges the scorer decided:
+
+| Clustering | Precision | Recall | F1 |
+|---|---|---|---|
+| Transitive union-find | 0.9726 | 1.0000 | 0.9861 |
+| **Veto-constrained** | **1.0000** | **1.0000** | **1.0000** |
+
+### Why the pairwise F1 above cannot see this
+
+Precision and recall in §6 are computed over pairs the scorer decided
+individually. Matching is not transitive, so a chain of three individually
+reasonable decisions - A resembles B, B resembles C - can produce a cluster
+that is wrong as an entity while every pairwise decision in it looks defensible.
+
+Plain union-find loses 2.7 points of precision to exactly that. It is not one
+wrong entity either: an over-merge welds two clusters together permanently and
+every record in both is now wrong.
+
+The constrained version processes match edges in **descending score order** and
+refuses any merge that would place two vetoed records in one cluster. It refused
+10 merges here and recovered all of the precision, at no cost to recall.
+
+### The ordering matters
+
+Highest confidence first is not cosmetic. Once two clusters are joined, every
+veto spanning them blocks nothing - the damage is already done. Making the
+most reliable merges while there is still room to refuse the unreliable ones is
+what makes the constraint effective rather than arbitrary.
+
+---
+
+## 8. Fusion and the resolved entities
+
+```
+187 entities written, 1,303 properties, 1,303 provenance records
+dedup ratio 0.5926  (459 records -> 187 entities)
+```
+
+Every property carries a provenance record naming the winner's source row, its
+transform chain, the rule that chose it, and **every rejected alternative with
+the reason it lost**:
+
+```
+name = "Rotterdam"
+  rule       most_trusted
+  origin     unlocode batch 1 row 2, column NameWoDiacritics
+  chain      trim -> collapse_ws -> title_case
+  rejected   "ROTTERDAM"  from wpi row 10000, column Main Port Name
+             lower source trust (0.80 < 0.95)
+```
+
+That is the difference between an answer and an assertion, and it is why the
+rejected values are stored rather than discarded.
+
+### The rules, and why each property gets a different one
+
+| Property | Rule | Why |
+|---|---|---|
+| `locode`, `name` | `most_trusted` | UN/LOCODE is the code authority; when it disagrees with the World Port Index it wins |
+| `lat`, `lon` | `numeric_median` | resists one bad coordinate entirely - a mean would let it drag the answer halfway |
+| `flag` | `most_recent` | a reflagged vessel genuinely changed flag, so the newest observation is the true one |
+| `alt_names` | `union` | a list property loses information under any rule that picks one value |
+
+`MedianResistsOneBadCoordinate` asserts this directly: the median of
+{0.0, 51.92, 51.94} is 51.92, where a mean would give 34.6.
+
+---
+
+## 9. Known limitations
+
+**Records are held in memory during resolution.** At 459 records that is a few
+megabytes and it is what makes the tuner's inner loop feasible. At the full
+UN/LOCODE scale it would have to stream, and the tuner would have to work from
+cached feature vectors on disk. This is a real limit, not a detail.
+
+**The distance veto never fires on this corpus.** It is checked after the
+locode and country vetoes, and blocking only proposes pairs that already share
+a code, a name or a geographic cell - so everything it would catch has been
+rejected for a more specific reason first. It stays because the blocking scheme
+is configuration, and `DistantPortsAreVetoedWhenNothingElseRejectsThemFirst`
+exercises it directly so that a rule nobody runs is still a rule somebody tests.
+
+**A weighted sum, not a learned model.** With a few hundred labels a logistic
+regression would overfit, and it would destroy the per-feature explanation the
+lineage panel depends on. Given 10⁵ labels the right answer changes - use the
+model, keep the feature vector as the explanation layer.

@@ -26,7 +26,7 @@ C++20 · React · no storage dependencies
 | **Day 5** - keyspace codec, ULID, ordered encodings | ✅ | 209 tests green |
 | **Days 6-7** - ontology, transforms, three connectors | ✅ | 314 tests green |
 | **Day 8** - normalization, blocking, RR/PC | ✅ | 350 tests green |
-| Days 9-10 - scoring, clustering, fusion | ⬜ | |
+| **Days 9-10** - scoring, clustering, fusion | ✅ | 370 tests green |
 | Days 11-12 - lineage, query engine, HTTP API | ⬜ | |
 | Days 13-14 - React frontend | ⬜ | |
 
@@ -66,6 +66,8 @@ with no network and no downloads.
 ./build/src/cli/sextant ingest --source digitraffic_ais
 ./build/src/cli/sextant stats
 ./build/src/cli/sextant block                       # blocking + RR/PC report
+./build/src/cli/sextant eval                        # precision, recall, F1
+./build/src/cli/sextant resolve                     # cluster, fuse, write entities
 ```
 
 On Windows, MSVC is a multi-config generator, so the binary lands one directory
@@ -126,9 +128,8 @@ not a filter - it is a range scan over a big-endian timestamp suffix
    src/query/      planner · index selection · traversal        NOT BUILT (day 12)
    src/lineage/    provenance at every fusion decision          NOT BUILT (day 11)
   ─────────────────────────────────────────────────────────────────────────────────
-   src/resolve/    normalize · block          built
-                   score · cluster · fuse     NOT BUILT (days 9-10)
-   src/cli/        ingest · stats · block · lineage · schema    built
+   src/resolve/    normalize · block · score · cluster · fuse   built
+   src/cli/        ingest · stats · block · eval · resolve · lineage · schema  built
    src/connectors/ CSV · REST/JSON · Postgres                   built
    src/ontology/   declarative types, links and transforms      built
    src/codec/      key encoding - the glue                      built
@@ -200,7 +201,10 @@ what the engine does when durability is actually required.
 | | Every stored value replays from its recorded transform chain and raw cell - the day 11 test in miniature |
 | Blocking | Reduction ratio **0.993**, pair completeness **0.997** on 1,370 labeled port pairs, **1.000** on 272 vessel pairs · [methodology](docs/ER.md) |
 | | Per-key attribution measured, and it found one of the five keys contributing **zero** unique recall - written up rather than quietly dropped |
-| Entity resolution | *day 10* - F1 on a held-out labeled set |
+| Entity resolution | **F1 0.991** on a held-out split the weights were never fitted to (266 port pairs) · 1.000 on vessels · [methodology](docs/ER.md) |
+| | Veto-constrained clustering measured against plain union-find: precision **1.000 vs 0.973**, 10 merges refused |
+| | Three pairs where the MMSI matches exactly and the answer is still no - an IMO conflict is a rule, not a weight to be outvoted |
+| | 459 records resolve to 187 entities, dedup ratio **0.593**, every property carrying provenance with its rejected alternatives |
 | Lineage | *day 11* - round-trip verified for 100% of resolved properties |
 
 ### The result that matters most

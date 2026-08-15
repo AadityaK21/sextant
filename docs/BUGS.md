@@ -451,6 +451,54 @@ the pointer error that was never there.
 
 ---
 
+## A veto rule that never runs          2026-08-15
+
+**Symptom.** A test asserting the port distance veto fires at least once over
+the corpus. It fired zero times.
+
+**Root cause.** Not a bug - an ordering consequence I had not thought through.
+The distance check is third, after the locode and country vetoes, and blocking
+only proposes pairs that already share a code, a name or a geographic cell. By
+the time a pair reaches the distance check, everything it would have caught has
+been rejected for a more specific reason. The rule is redundant given today's
+blocking scheme.
+
+**Fix.** The test now asserts the count is **zero** and says why, so the day the
+blocking scheme changes and the veto starts firing, the test fails and the
+comment gets revisited. A second test exercises the rule directly on a synthetic
+pair - Portsmouth, New Hampshire against Portsmouth, Virginia, same name, same
+country, 837 km apart.
+
+**Lesson.** A rule nobody runs is a rule nobody is testing, and deleting it is
+not obviously right either, because it is only redundant against a configuration
+that can change. Asserting the redundancy is the honest middle: the guard stays,
+its uselessness is documented, and the documentation is executable.
+
+---
+
+## Two Portsmouths, and a test fixture built on a bad guess          2026-08-15
+
+**Symptom.** The replacement test above failed immediately. It scored Portsmouth
+New Hampshire against Portsmouth Virginia expecting *no* veto - I had picked
+them as a "close enough to be ambiguous" pair - and got `837 km apart, beyond
+the 150 km limit`.
+
+**Root cause.** My mental estimate of the distance was wrong by a factor of
+five. The code was right; the fixture encoded a guess about geography that I had
+not checked.
+
+**Fix.** A synthetic pair 94 km apart for the under-the-limit case, and the two
+real Portsmouths kept as the over-the-limit one - where they are a genuinely
+good example, since name similarity alone would merge them happily.
+
+**Lesson.** This is the second time in two days a test failed because the
+*expectation* was wrong rather than the code, after the IMO check digit. Both
+times the failure taught me something about the domain. A test that encodes a
+belief you have not verified is still worth writing - it just needs to be read
+as a question rather than an assertion when it goes red.
+
+---
+
 <!-- Add entries as you go. Suggested candidates from the plan:
      - the first tombstone resurrection you hit once SSTables land (day 2-4)
      - whatever the lineage round-trip test catches on day 11 (it will catch
