@@ -24,6 +24,7 @@ sextant_add_test(test_db            lsm/test_db.cpp)
 sextant_add_test(test_flush         lsm/test_flush.cpp)
 sextant_add_test(test_compaction    lsm/test_compaction.cpp)
 sextant_add_test(test_db_diff       lsm/test_db_differential.cpp)
+sextant_add_test(test_crash         lsm/test_crash.cpp)
 
 # --- day 5: the keyspace codec ---
 function(sextant_add_codec_test name)

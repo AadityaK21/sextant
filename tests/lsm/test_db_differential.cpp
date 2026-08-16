@@ -124,7 +124,21 @@ std::string RandomValue(std::mt19937& rnd, size_t max_len) {
 }  // namespace
 
 TEST_F(DifferentialTest, RandomOperationsMatchStdMap) {
-  static constexpr int kOps = 60000;
+  // A MILLION OPERATIONS, which is the bar the execution plan set.
+  //
+  // It was 60,000 until day 15, which was enough to cross a handful of flush
+  // boundaries and not much else. At a million the run spans hundreds of
+  // memtable flushes and repeated compactions, so a version-visibility bug or a
+  // tombstone dropped one level too early has somewhere to show up. The run
+  // costs about ten seconds, which is a fair price for the one test that
+  // compares the whole engine against a reference implementation.
+  //
+  // The key space stays small on purpose: 800 keys over a million operations
+  // means each key is overwritten and deleted roughly a thousand times, which
+  // is what actually exercises version shadowing and tombstone handling.
+  // Spreading the same ops over a million distinct keys would be a bigger test
+  // of nothing in particular.
+  static constexpr int kOps = 1000000;
   static constexpr int kKeySpace = 800;
 
   std::vector<std::string> key_space;
