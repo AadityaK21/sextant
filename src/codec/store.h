@@ -301,6 +301,23 @@ class Store {
   // Most uncertain first.
   std::unique_ptr<RangeIterator> ScanCandidates(const ReadContext& ctx = {});
 
+  // --- recompute ---
+  //
+  // Delete every key in a keyspace, in batches.
+  //
+  // WHY THIS EXISTS
+  //
+  // Resolution is a full recompute by design - the README says so under
+  // non-goals - and a full recompute has to REPLACE its output, not add to it.
+  // Entity ids are freshly generated ULIDs, so without this a second
+  // `sextant resolve` writes a complete second copy of the graph alongside the
+  // first, and every count silently doubles.
+  //
+  // Only ever called on DERIVED keyspaces. RAW, SRCREC and INGEST are the
+  // record of what was ingested and are not this function's business; passing
+  // one of them is a caller error and is rejected.
+  Status ClearKeyspace(Keyspace keyspace, uint64_t* deleted = nullptr);
+
  private:
   friend class EntityWriter;
   friend class RowWriter;

@@ -418,3 +418,72 @@ TEST_F(StoreTest, ScansDoNotLeakIntoAdjacentKeyspaces) {
   for (auto it = store_->ScanEntities(kPort); it->Valid(); it->Next()) ++ports;
   EXPECT_EQ(1, ports);
 }
+
+// --- clearing a derived keyspace --------------------------------------------
+//
+// Resolution is a full recompute, so it has to be able to replace its own
+// output. Without this, a second `sextant resolve` writes a complete second
+// copy of the graph beside the first - entity ids are freshly generated ULIDs,
+// so nothing collides and nothing errors. It was found by a frontend contract
+// check computing a NEGATIVE dedup ratio, because entities had come to
+// outnumber the source records they were derived from.
+
+TEST_F(StoreTest, ClearingTheEntityKeyspaceLeavesTheIngestedDataAlone) {
+  const Ulid port = AddPort("Rotterdam", "NLRTM", 51.9225);
+  ASSERT_TRUE(store_->PutRawRecord(1, 1, 1, Slice("the original row")).ok());
+  ASSERT_TRUE(store_->PutSourceRecord(1, 0xABCD, Slice("normalised")).ok());
+
+  auto w = store_->EditEntity(kVoyage, Ulid::Generate());
+  w.SetPayload(Slice("v")).AddLink(kArrivesAt, port);
+  ASSERT_TRUE(w.Commit().ok());
+
+  uint64_t deleted = 0;
+  ASSERT_TRUE(store_->ClearKeyspace(Keyspace::kEntity, &deleted).ok());
+  EXPECT_EQ(2u, deleted) << "one Port and one Voyage";
+
+  int remaining = 0;
+  for (auto it = store_->ScanEntities(kPort); it->Valid(); it->Next()) ++remaining;
+  for (auto it = store_->ScanEntities(kVoyage); it->Valid(); it->Next()) ++remaining;
+  EXPECT_EQ(0, remaining);
+
+  // The ingested data is untouched, which is the whole point: resolution
+  // recomputes FROM these.
+  std::string raw;
+  EXPECT_TRUE(store_->GetRawRecord(1, 1, 1, &raw).ok());
+  EXPECT_EQ("the original row", raw);
+  std::string record;
+  EXPECT_TRUE(store_->GetSourceRecord(1, 0xABCD, &record).ok());
+
+  // And the links are still there, because clearing one keyspace clears one
+  // keyspace. The caller lists every derived one it means to replace.
+  int links = 0;
+  for (auto it = store_->ScanIncoming(port, kArrivesAt); it->Valid(); it->Next()) {
+    ++links;
+  }
+  EXPECT_EQ(1, links);
+}
+
+TEST_F(StoreTest, ClearingRefusesToTouchIngestedKeyspaces) {
+  // A guard rather than a convention. The call site lists eight derived
+  // keyspaces by hand, and the day someone adds RAW to that list by mistake is
+  // the day lineage stops having anything to point at - permanently, because
+  // RAW is the only copy of what the source said.
+  ASSERT_TRUE(store_->PutRawRecord(1, 1, 1, Slice("irreplaceable")).ok());
+
+  for (const auto keyspace : {Keyspace::kRaw, Keyspace::kSourceRecord,
+                              Keyspace::kIngest}) {
+    const auto status = store_->ClearKeyspace(keyspace);
+    EXPECT_TRUE(status.IsInvalidArgument())
+        << KeyspaceName(keyspace) << " should have been refused";
+  }
+
+  std::string raw;
+  EXPECT_TRUE(store_->GetRawRecord(1, 1, 1, &raw).ok());
+  EXPECT_EQ("irreplaceable", raw);
+}
+
+TEST_F(StoreTest, ClearingIsSafeOnAKeyspaceThatIsAlreadyEmpty) {
+  uint64_t deleted = 7;
+  ASSERT_TRUE(store_->ClearKeyspace(Keyspace::kTimeIndex, &deleted).ok());
+  EXPECT_EQ(0u, deleted);
+}

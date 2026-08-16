@@ -304,6 +304,52 @@ Status Store::PutCandidate(double score, uint64_t pair_hash, const Slice& payloa
                   payload);
 }
 
+Status Store::ClearKeyspace(Keyspace keyspace, uint64_t* deleted) {
+  switch (keyspace) {
+    case Keyspace::kRaw:
+    case Keyspace::kSourceRecord:
+    case Keyspace::kIngest:
+      // These three are the record of what was ingested. Resolution recomputes
+      // from them and must never be able to remove them, so this refuses
+      // rather than trusting every future caller to remember.
+      return Status::InvalidArgument(
+          std::string("refusing to clear ") + KeyspaceName(keyspace) +
+          ": it is ingested data, not derived");
+    default:
+      break;
+  }
+
+  std::string prefix(1, static_cast<char>(keyspace));
+  const std::string until = PrefixUpperBound(prefix);
+  uint64_t removed = 0;
+
+  // Batched rather than one Delete per key: a tombstone per key is unavoidable,
+  // but a WAL record per key is not, and this runs over every entity in the
+  // store. Bounded so a large database does not build one enormous batch in
+  // memory before anything reaches disk.
+  constexpr int kBatchSize = 4096;
+  while (true) {
+    lsm::WriteBatch batch;
+    {
+      auto iter = db_->NewIterator(lsm::ReadOptions{});
+      iter->Seek(Slice(prefix));
+      for (; iter->Valid(); iter->Next()) {
+        if (iter->key().compare(Slice(until)) >= 0) break;
+        batch.Delete(iter->key());
+        if (batch.Count() >= kBatchSize) break;
+      }
+      if (!iter->status().ok()) return iter->status();
+    }
+    if (batch.Count() == 0) break;
+    removed += static_cast<uint64_t>(batch.Count());
+    const Status s = db_->Write(lsm::WriteOptions{}, &batch);
+    if (!s.ok()) return s;
+  }
+
+  if (deleted != nullptr) *deleted = removed;
+  return Status::OK();
+}
+
 std::unique_ptr<RangeIterator> Store::ScanCandidates(const ReadContext& ctx) {
   // Scores are stored negated, so a forward scan is highest-score-first: the
   // pairs sitting closest to the decision boundary, which are the ones a human

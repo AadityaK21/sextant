@@ -274,6 +274,47 @@ int CmdResolve(const Args& args) {
   std::printf("  %zu source records, %llu candidate pairs\n", ctx.records.size(),
               static_cast<unsigned long long>(ctx.blocking.candidate_pairs));
 
+  // CLEAR THE DERIVED KEYSPACES BEFORE WRITING ANYTHING.
+  //
+  // Resolution is a full recompute, and a full recompute must REPLACE its
+  // output. Entity ids are freshly generated ULIDs, so without this a second
+  // run writes a complete second copy of the graph beside the first and every
+  // count silently doubles - 144 ports become 288, and nothing errors.
+  //
+  // It happens HERE, before the scoring loop, rather than next to the entity
+  // writes further down: the loop below writes candidate pairs to CAND as it
+  // goes, so clearing later would erase the queue this run had just built.
+  //
+  // RAW, SRCREC and INGEST are untouched. They are what was ingested and this
+  // recomputes FROM them; Store::ClearKeyspace refuses those three outright
+  // rather than trusting this call site to keep the list right.
+  //
+  // --dry-run skips it, so a dry run cannot damage a database it promised not
+  // to write to.
+  if (!args.Has("dry-run")) {
+    const codec::Keyspace derived[] = {
+        codec::Keyspace::kEntity,    codec::Keyspace::kLinkOut,
+        codec::Keyspace::kLinkIn,    codec::Keyspace::kProvenance,
+        codec::Keyspace::kCrossRef,  codec::Keyspace::kIndex,
+        codec::Keyspace::kTimeIndex, codec::Keyspace::kCandidate,
+    };
+    uint64_t cleared = 0;
+    for (const auto keyspace : derived) {
+      uint64_t n = 0;
+      const Status s = ctx.store->ClearKeyspace(keyspace, &n);
+      if (!s.ok()) {
+        std::fprintf(stderr, "clearing %s: %s\n", codec::KeyspaceName(keyspace),
+                     s.ToString().c_str());
+        return 1;
+      }
+      cleared += n;
+    }
+    if (cleared > 0) {
+      std::printf("  cleared %llu keys from a previous resolve\n",
+                  static_cast<unsigned long long>(cleared));
+    }
+  }
+
   // Score every candidate pair the blocker proposed.
   const resolve::PairScorer scorer(&ctx.config, &ctx.props);
   std::vector<resolve::ScoredEdge> edges;
@@ -300,11 +341,25 @@ int CmdResolve(const Args& args) {
 
     // The review band goes to the CAND keyspace, keyed by inverted score so a
     // scan returns the most uncertain pairs first.
+    //
+    // The payload is the STRUCTURED record, not the rendered sentence. The
+    // review queue's whole job is to show which feature carried the score - a
+    // +5.2 that is mostly a name similarity between two different Italian
+    // ports is a very different thing from a +5.2 carrying a locode match, and
+    // a reviewer cannot tell them apart from a number.
     if (score.decision == resolve::Decision::kReview) {
-      const std::string explanation = score.Explain();
+      resolve::CandidateRecord record;
+      record.a = candidate.pair.a;
+      record.b = candidate.pair.b;
+      record.a_label = a->second.natural_key;
+      record.b_label = b->second.natural_key;
+      record.score = score;
+
+      std::string payload;
+      record.EncodeTo(&payload);
       ctx.store->PutCandidate(score.score,
                               candidate.pair.a.key_hash ^ candidate.pair.b.key_hash,
-                              lsm::Slice(explanation));
+                              lsm::Slice(payload));
     }
   }
 
