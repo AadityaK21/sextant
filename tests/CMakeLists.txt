@@ -6,7 +6,14 @@ function(sextant_add_test name)
   target_include_directories(${name} PRIVATE
     ${CMAKE_SOURCE_DIR}/src/lsm
     ${CMAKE_SOURCE_DIR}/include)
-  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 30)
+  # PRE_TEST defers enumeration to `ctest` time instead of build time. The
+  # default runs each freshly linked binary during the build to list its tests,
+  # which fails on any host where the binary cannot run there and then - a
+  # sanitizer build on a container with hardened ASLR being the case that
+  # actually bit here. Worse, ninja then deletes the binary as a failed output,
+  # so a build that produced a working executable reports failure and leaves
+  # nothing behind.
+  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 30 DISCOVERY_MODE PRE_TEST)
 endfunction()
 
 sextant_add_test(test_coding        lsm/test_coding.cpp)
@@ -25,6 +32,7 @@ sextant_add_test(test_flush         lsm/test_flush.cpp)
 sextant_add_test(test_compaction    lsm/test_compaction.cpp)
 sextant_add_test(test_db_diff       lsm/test_db_differential.cpp)
 sextant_add_test(test_crash         lsm/test_crash.cpp)
+sextant_add_test(test_concurrency   lsm/test_concurrency.cpp)
 
 # --- day 5: the keyspace codec ---
 function(sextant_add_codec_test name)
@@ -34,7 +42,14 @@ function(sextant_add_codec_test name)
     ${CMAKE_SOURCE_DIR}/src/codec
     ${CMAKE_SOURCE_DIR}/src/lsm
     ${CMAKE_SOURCE_DIR}/include)
-  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 30)
+  # PRE_TEST defers enumeration to `ctest` time instead of build time. The
+  # default runs each freshly linked binary during the build to list its tests,
+  # which fails on any host where the binary cannot run there and then - a
+  # sanitizer build on a container with hardened ASLR being the case that
+  # actually bit here. Worse, ninja then deletes the binary as a failed output,
+  # so a build that produced a working executable reports failure and leaves
+  # nothing behind.
+  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 30 DISCOVERY_MODE PRE_TEST)
 endfunction()
 
 sextant_add_codec_test(test_ulid      codec/test_ulid.cpp)
@@ -58,7 +73,14 @@ function(sextant_add_ontology_test name)
     ${CMAKE_SOURCE_DIR}/src/lsm
     ${CMAKE_SOURCE_DIR}/include)
   target_compile_definitions(${name} PRIVATE SEXTANT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 30)
+  # PRE_TEST defers enumeration to `ctest` time instead of build time. The
+  # default runs each freshly linked binary during the build to list its tests,
+  # which fails on any host where the binary cannot run there and then - a
+  # sanitizer build on a container with hardened ASLR being the case that
+  # actually bit here. Worse, ninja then deletes the binary as a failed output,
+  # so a build that produced a working executable reports failure and leaves
+  # nothing behind.
+  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 30 DISCOVERY_MODE PRE_TEST)
 endfunction()
 
 function(sextant_add_connector_test name)
@@ -72,7 +94,14 @@ function(sextant_add_connector_test name)
     ${CMAKE_SOURCE_DIR}/src/lsm
     ${CMAKE_SOURCE_DIR}/include)
   target_compile_definitions(${name} PRIVATE SEXTANT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 30)
+  # PRE_TEST defers enumeration to `ctest` time instead of build time. The
+  # default runs each freshly linked binary during the build to list its tests,
+  # which fails on any host where the binary cannot run there and then - a
+  # sanitizer build on a container with hardened ASLR being the case that
+  # actually bit here. Worse, ninja then deletes the binary as a failed output,
+  # so a build that produced a working executable reports failure and leaves
+  # nothing behind.
+  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 30 DISCOVERY_MODE PRE_TEST)
 endfunction()
 
 sextant_add_ontology_test(test_value      ontology/test_value.cpp)
@@ -97,7 +126,14 @@ function(sextant_add_resolve_test name)
     ${CMAKE_SOURCE_DIR}/src/lsm
     ${CMAKE_SOURCE_DIR}/include)
   target_compile_definitions(${name} PRIVATE SEXTANT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 30)
+  # PRE_TEST defers enumeration to `ctest` time instead of build time. The
+  # default runs each freshly linked binary during the build to list its tests,
+  # which fails on any host where the binary cannot run there and then - a
+  # sanitizer build on a container with hardened ASLR being the case that
+  # actually bit here. Worse, ninja then deletes the binary as a failed output,
+  # so a build that produced a working executable reports failure and leaves
+  # nothing behind.
+  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 30 DISCOVERY_MODE PRE_TEST)
 endfunction()
 
 sextant_add_resolve_test(test_normalize  resolve/test_normalize.cpp)
@@ -121,7 +157,7 @@ function(sextant_add_lineage_test name)
     ${CMAKE_SOURCE_DIR}/src/lsm
     ${CMAKE_SOURCE_DIR}/include)
   target_compile_definitions(${name} PRIVATE SEXTANT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 60)
+  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 60 DISCOVERY_MODE PRE_TEST)
 endfunction()
 
 sextant_add_lineage_test(test_lineage lineage/test_lineage.cpp)
@@ -149,7 +185,7 @@ function(sextant_add_query_test name)
   target_compile_definitions(${name} PRIVATE SEXTANT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   # The corpus fixture runs the whole pipeline before the first assertion, which
   # takes longer than the default discovery timeout allows for.
-  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 60)
+  gtest_discover_tests(${name} DISCOVERY_TIMEOUT 60 DISCOVERY_MODE PRE_TEST)
 endfunction()
 
 sextant_add_query_test(test_query query/test_query.cpp)

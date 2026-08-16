@@ -20,6 +20,7 @@ endif()
 option(SEXTANT_BUILD_TESTS  "Build the test suite" ON)
 option(SEXTANT_BUILD_BENCH  "Build benchmarks"     ON)
 option(SEXTANT_ASAN         "Enable AddressSanitizer + UBSan" OFF)
+option(SEXTANT_TSAN         "Enable ThreadSanitizer"          OFF)
 
 # Warnings are carried by an interface target rather than set globally, so they
 # apply to our code and not to the dependencies. Turning -Wall on for a fetched
@@ -47,6 +48,25 @@ endif()
 if(SEXTANT_ASAN AND NOT MSVC)
   add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
   add_link_options(-fsanitize=address,undefined)
+endif()
+
+# ThreadSanitizer is a SEPARATE build, not an addition to the one above: TSan
+# and ASan cannot be linked into the same binary.
+#
+# It earns its own option because this engine has exactly the shape TSan is for
+# - a background compaction thread mutating structures that reader threads walk
+# - and because the one real concurrency bug found in this project was invisible
+# to every other tool. It was a refcount released on the iterator's thread
+# without the DB mutex: single-threaded tests all passed, ASan saw nothing, and
+# only reading the code or running TSan finds it. See docs/BUGS.md.
+if(SEXTANT_TSAN AND NOT MSVC)
+  if(SEXTANT_ASAN)
+    message(FATAL_ERROR
+      "SEXTANT_ASAN and SEXTANT_TSAN cannot be enabled together; "
+      "configure two build directories instead")
+  endif()
+  add_compile_options(-fsanitize=thread -fno-omit-frame-pointer -g)
+  add_link_options(-fsanitize=thread)
 endif()
 
 # ---------------------------------------------------------------------------
