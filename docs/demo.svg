@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 842 1442" width="842" height="1442" font-family="ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="13">
+<rect width="842" height="1442" rx="8" fill="#0b0f14"/>
+<g>
+<text x="18" y="37" fill="#7d8ba1"># what was ingested</text>
+<text x="18" y="56" xml:space="preserve"><tspan fill="#3ecf8e">$</tspan> <tspan fill="#d7e0ea">sextant stats</tspan></text>
+<text x="18" y="75" fill="#7d8ba1" xml:space="preserve">source            batches        raw    records   latest</text>
+<text x="18" y="94" fill="#d7e0ea" xml:space="preserve">digitraffic             3       1112       1112        3</text>
+<text x="18" y="113" fill="#d7e0ea" xml:space="preserve">digitraffic_ais         1         40         40        1</text>
+<text x="18" y="132" fill="#d7e0ea" xml:space="preserve">marinecadastre          0          0          0        0</text>
+<text x="18" y="151" fill="#d7e0ea" xml:space="preserve">unlocode                1        144        144        1</text>
+<text x="18" y="170" fill="#d7e0ea" xml:space="preserve">wpi                     1        155        155        1</text>
+<text x="18" y="189" fill="#d7e0ea" xml:space="preserve">total                           1451       1451</text>
+<text x="18" y="208" fill="#7d8ba1">  (0.03s)</text>
+</g>
+<g>
+<text x="18" y="227" fill="#7d8ba1"># entity resolution, on a held-out split</text>
+<text x="18" y="246" xml:space="preserve"><tspan fill="#3ecf8e">$</tspan> <tspan fill="#d7e0ea">sextant eval</tspan></text>
+<text x="18" y="265" fill="#d7e0ea" xml:space="preserve">golden_ports.csv  (Port)</text>
+<text x="18" y="284" fill="#d7e0ea" xml:space="preserve">  1370 labeled pairs, 1370 scored, 0 unscorable</text>
+<text x="18" y="303" fill="#d7e0ea" xml:space="preserve">    ... 8 lines ...</text>
+<text x="18" y="322" fill="#d7e0ea" xml:space="preserve">      name_jaro_winkler +3.33 (GDYNIA / GDANSK (0.67)), country_match +3.00 (both PL), geo_pr...</text>
+<text x="18" y="341" fill="#d7e0ea" xml:space="preserve">    6.17  digitraffic:FIOUL &lt;-&gt; wpi:10550</text>
+<text x="18" y="360" fill="#d7e0ea" xml:space="preserve">      name_jaro_winkler +3.17 (TURKU / OULU (0.63)), country_match +3.00 (both FI)</text>
+<text x="18" y="379" fill="#d7e0ea" xml:space="preserve">  worst false negatives (missed):</text>
+<text x="18" y="398" fill="#d7e0ea" xml:space="preserve">    5.78  digitraffic:NLRTM &lt;-&gt; wpi:10002</text>
+<text x="18" y="417" fill="#d7e0ea" xml:space="preserve">      country_match +3.00 (both NL), name_jaro_winkler +2.78 (EUROPOORT / ROTTERDAM (0.56))</text>
+<text x="18" y="436" fill="#d7e0ea" xml:space="preserve">golden_vessels.csv  (Vessel)</text>
+<text x="18" y="455" fill="#d7e0ea" xml:space="preserve">  272 labeled pairs, 272 scored, 0 unscorable</text>
+<text x="18" y="474" fill="#4aa8ff" xml:space="preserve">  train      TP 27    FP 0     TN 190   FN 0       P 1.0000  R 1.0000  F1 1.0000</text>
+<text x="18" y="493" fill="#4aa8ff" xml:space="preserve">  HELD-OUT   TP 10    FP 0     TN 45    FN 0       P 1.0000  R 1.0000  F1 1.0000</text>
+<text x="18" y="512" fill="#4aa8ff" xml:space="preserve">  overall    TP 37    FP 0     TN 235   FN 0       P 1.0000  R 1.0000  F1 1.0000</text>
+<text x="18" y="531" fill="#d7e0ea" xml:space="preserve">  203 vetoed, 0 true pairs parked in review</text>
+<text x="18" y="550" fill="#7d8ba1">  (0.04s)</text>
+</g>
+<g>
+<text x="18" y="569" fill="#7d8ba1"># cluster, fuse, write entities with provenance</text>
+<text x="18" y="588" xml:space="preserve"><tspan fill="#3ecf8e">$</tspan> <tspan fill="#d7e0ea">sextant resolve</tspan></text>
+<text x="18" y="607" fill="#d7e0ea" xml:space="preserve">resolve</text>
+<text x="18" y="626" fill="#d7e0ea" xml:space="preserve">  1451 source records, 470 candidate pairs</text>
+<text x="18" y="645" fill="#d7e0ea" xml:space="preserve">    ... 4 lines ...</text>
+<text x="18" y="664" fill="#d7e0ea" xml:space="preserve">  golden_ports.csv - cluster-level, over the pairs the clustering IMPLIES</text>
+<text x="18" y="683" fill="#4aa8ff" xml:space="preserve">  transitive             P 0.9726  R 1.0000  F1 0.9861</text>
+<text x="18" y="702" fill="#4aa8ff" xml:space="preserve">  veto-constrained       P 1.0000  R 1.0000  F1 1.0000</text>
+<text x="18" y="721" fill="#d7e0ea" xml:space="preserve">  golden_vessels.csv - cluster-level, over the pairs the clustering IMPLIES</text>
+<text x="18" y="740" fill="#4aa8ff" xml:space="preserve">  transitive             P 1.0000  R 1.0000  F1 1.0000</text>
+<text x="18" y="759" fill="#4aa8ff" xml:space="preserve">  veto-constrained       P 1.0000  R 1.0000  F1 1.0000</text>
+<text x="18" y="778" fill="#d7e0ea" xml:space="preserve">  1187 entities written, 4201 properties, 4201 provenance records</text>
+<text x="18" y="797" fill="#d7e0ea" xml:space="preserve">  3000 link references -&gt; 3000 edges (1898 time-indexed, 0 unresolved, 0 orphaned)</text>
+<text x="18" y="816" fill="#d7e0ea" xml:space="preserve">    operated_by      1000</text>
+<text x="18" y="835" fill="#d7e0ea" xml:space="preserve">    departs_from     1000</text>
+<text x="18" y="854" fill="#d7e0ea" xml:space="preserve">    arrives_at       1000</text>
+<text x="18" y="873" fill="#4aa8ff" xml:space="preserve">  dedup ratio 0.1819  (1451 records -&gt; 1187 entities)</text>
+<text x="18" y="892" fill="#7d8ba1">  (0.08s)</text>
+</g>
+<g>
+<text x="18" y="911" fill="#7d8ba1"># the lineage round trip: the headline result</text>
+<text x="18" y="930" xml:space="preserve"><tspan fill="#3ecf8e">$</tspan> <tspan fill="#d7e0ea">sextant explain</tspan></text>
+<text x="18" y="949" fill="#d7e0ea" xml:space="preserve">lineage round trip</text>
+<text x="18" y="968" fill="#d7e0ea" xml:space="preserve">  1187 entities, 4201 properties</text>
+<text x="18" y="987" fill="#3ecf8e" xml:space="preserve">  4201 verified, 0 failed  -&gt;  100.00%</text>
+<text x="18" y="1006" fill="#d7e0ea" xml:space="preserve">  (144 of those are union properties, checked by containment rather than equality)</text>
+<text x="18" y="1025" fill="#7d8ba1">  (0.07s)</text>
+</g>
+<g>
+<text x="18" y="1044" fill="#7d8ba1"># the quarter query</text>
+<text x="18" y="1063" xml:space="preserve"><tspan fill="#3ecf8e">$</tspan> <tspan fill="#d7e0ea">sextant query --type Port --where locode=NLRTM --link arrivals --from 2026-04-01T00:00:00Z \</tspan></text>
+<text x="18" y="1082" xml:space="preserve">  <tspan fill="#d7e0ea">--to 2026-07-01T00:00:00Z --show 3</tspan></text>
+<text x="18" y="1101" fill="#d7e0ea" xml:space="preserve">start Port [locode eq NLRTM] -&gt; arrivals [2026-04-01T00:00:00.000Z, 2026-07-01T00:00:00.000Z)...</text>
+<text x="18" y="1120" fill="#d7e0ea" xml:space="preserve">  plan</text>
+<text x="18" y="1139" fill="#d7e0ea" xml:space="preserve">    ... 7 lines ...</text>
+<text x="18" y="1158" fill="#d7e0ea" xml:space="preserve">  24 result(s)</text>
+<text x="18" y="1177" fill="#d7e0ea" xml:space="preserve">    01M04T09RZ00EE5HQT523Z2RV6  3120477</text>
+<text x="18" y="1196" fill="#d7e0ea" xml:space="preserve">    01M04T09RZ00EE5HQT523Z2RQW  3120846</text>
+<text x="18" y="1215" fill="#d7e0ea" xml:space="preserve">    01M04T09S1KB5X3EZSDKT374W0  3120117</text>
+<text x="18" y="1234" fill="#d7e0ea" xml:space="preserve">    ... 21 more</text>
+<text x="18" y="1253" fill="#d7e0ea" xml:space="preserve">  cost</text>
+<text x="18" y="1272" fill="#4aa8ff" xml:space="preserve">    index_used            TIDX</text>
+<text x="18" y="1291" fill="#4aa8ff" xml:space="preserve">    keys_scanned          25</text>
+<text x="18" y="1310" fill="#d7e0ea" xml:space="preserve">    entities_materialised 24</text>
+<text x="18" y="1329" fill="#d7e0ea" xml:space="preserve">    blocks_read           15  (cache hits 13)</text>
+<text x="18" y="1348" fill="#d7e0ea" xml:space="preserve">    bloom_rejections      0</text>
+<text x="18" y="1367" fill="#d7e0ea" xml:space="preserve">    elapsed_us            351</text>
+<text x="18" y="1386" fill="#7d8ba1">  (0.02s)</text>
+</g>
+</svg>
