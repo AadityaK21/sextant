@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -54,8 +55,31 @@ class TableCache {
   uint64_t Misses() const { return cache_->Misses(); }
 
   // Total filter rejections across every currently-open table.
-  uint64_t FilterRejections() const { return filter_rejections_; }
-  void AddFilterRejections(uint64_t n) { filter_rejections_ += n; }
+  //
+  // ATOMIC BECAUSE THE READ PATH IS NOT UNDER THE DB MUTEX.
+  //
+  // DBImpl::Get deliberately releases the mutex before the disk read - that is
+  // the whole point of pinning the Version first - so several reader threads
+  // can be inside TableCache::Get at once. A plain `uint64_t += n` from two
+  // threads is a data race and therefore undefined behaviour, even though the
+  // value it corrupts is only a statistic.
+  //
+  // The temptation is to shrug: the counter would be approximately right, and
+  // nobody makes decisions on it. That reasoning does not survive contact with
+  // the standard. UB is not "the number is a bit off", it is "the compiler may
+  // assume this never happens", and a compiler that assumes a variable is
+  // thread-local is entitled to keep it in a register across the whole loop.
+  //
+  // Relaxed ordering because nothing is published through these: they are
+  // counters, not flags, and no other memory becomes visible by observing one.
+  // On x86 relaxed fetch_add is the same instruction the racy version compiled
+  // to, so this costs nothing and is correct.
+  uint64_t FilterRejections() const {
+    return filter_rejections_.load(std::memory_order_relaxed);
+  }
+  void AddFilterRejections(uint64_t n) {
+    filter_rejections_.fetch_add(n, std::memory_order_relaxed);
+  }
 
  private:
   Status FindTable(uint64_t file_number, uint64_t file_size, Cache::Handle**);
@@ -63,7 +87,7 @@ class TableCache {
   const std::string dbname_;
   const Options options_;
   std::unique_ptr<Cache> cache_;
-  mutable uint64_t filter_rejections_ = 0;
+  mutable std::atomic<uint64_t> filter_rejections_{0};
 };
 
 }  // namespace sextant::lsm

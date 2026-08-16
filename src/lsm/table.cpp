@@ -1,6 +1,7 @@
 #include "table.h"
 
 #include <cassert>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -27,12 +28,17 @@ struct Table::Rep {
   std::unique_ptr<FilterBlockReader> filter;
   std::unique_ptr<const char[]> filter_data;
 
-  uint64_t filter_rejections = 0;
+  // Atomic for the same reason TableCache::filter_rejections_ is: one Table is
+  // shared by every reader thread, and InternalGet runs without the DB mutex.
+  // See the note in table_cache.h.
+  std::atomic<uint64_t> filter_rejections{0};
 };
 
 Table::~Table() { delete rep_; }
 
-uint64_t Table::FilterRejections() const { return rep_->filter_rejections; }
+uint64_t Table::FilterRejections() const {
+  return rep_->filter_rejections.load(std::memory_order_relaxed);
+}
 
 Status Table::Open(const Options& options, std::unique_ptr<RandomAccessFile> file,
                    uint64_t size, std::unique_ptr<Table>* table) {
@@ -212,7 +218,10 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k, void* arg,
     Slice v = handle_value;
     if (handle.DecodeFrom(&v).ok() &&
         !rep_->filter->KeyMayMatch(handle.offset(), ExtractUserKey(k))) {
-      ++rep_->filter_rejections;
+      rep_->filter_rejections.fetch_add(1, std::memory_order_relaxed);
+      // `options.stats` is NOT atomic and does not need to be: a ReadStats
+      // belongs to one request, which is served by one thread. That contract is
+      // stated in options.h, and it is what keeps per-query accounting free.
       if (options.stats != nullptr) ++options.stats->bloom_rejections;
       return Status::OK();  // definitely not present; handle_result never runs
     }
