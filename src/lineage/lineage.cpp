@@ -315,7 +315,27 @@ Status LineageReader::Explain(codec::TypeId type, const codec::Ulid& entity,
   }
   out->replayed_value = replayed.ToDisplay();
   out->replay_error = error;
-  out->replay_matches = out->replayed_value == out->stored_value;
+
+  // A UNION PROPERTY IS CHECKED BY CONTAINMENT, NOT EQUALITY.
+  //
+  // `alt_names` is the merge of every alias every source contributed, so no
+  // single raw cell can reproduce the whole list. The honest question is
+  // whether what THIS row contributed survived into the stored value.
+  //
+  // This rule used to live only in RoundTrip(), which meant the two callers
+  // disagreed: the round trip counted a union property as verified and
+  // /api/entities/{id} reported `verified: false` for the same property at the
+  // same moment. The UI would have drawn a red mark on a value that is fine,
+  // right next to a README claiming 100%. One definition, in one place.
+  out->replay_is_union = prop_def != nullptr &&
+                         prop_def->fuse == onto::FusionRule::kUnion;
+  if (out->replay_is_union) {
+    out->replay_matches = out->replayed_value.empty() ||
+                          out->stored_value.find(out->replayed_value) !=
+                              std::string::npos;
+  } else {
+    out->replay_matches = out->replayed_value == out->stored_value;
+  }
   return Status::OK();
 }
 
@@ -384,16 +404,12 @@ Status LineageReader::RoundTrip(RoundTripReport* report,
         } else if (explanation.chain_changed) {
           result.failure = RoundTripFailure::kTransformChanged;
           result.detail = "the chain's version fingerprint no longer matches";
-        } else if (def != nullptr && def->fuse == onto::FusionRule::kUnion) {
-          // A union property is the merge of several sources, so no single raw
-          // cell can reproduce it. The honest check is containment: whatever
-          // this row contributed must be present in the stored list.
+        } else if (explanation.replay_is_union) {
+          // Containment rather than equality, decided in Explain() so that this
+          // report and the per-property API can never disagree about whether a
+          // union property verified.
           ++report->union_properties;
-          const bool contained =
-              explanation.replayed_value.empty() ||
-              result.stored_value.find(explanation.replayed_value) !=
-                  std::string::npos;
-          if (!contained) {
+          if (!explanation.replay_matches) {
             result.failure = RoundTripFailure::kValueMismatch;
             result.replayed_value = explanation.replayed_value;
             result.detail = "the replayed value is not part of the union";

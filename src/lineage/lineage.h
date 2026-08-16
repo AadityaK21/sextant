@@ -103,6 +103,12 @@ struct Explanation {
   bool replay_matches = false;
   std::string replay_error;
 
+  // True when `replay_matches` was decided by containment rather than equality,
+  // because the property is fused by union and no single source row can
+  // reproduce the merged list. Exposed so the UI can say which check it passed
+  // instead of implying every green tick means the same thing.
+  bool replay_is_union = false;
+
   std::string Render() const;
 };
 

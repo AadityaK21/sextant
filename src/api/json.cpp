@@ -210,6 +210,10 @@ json ExplanationToJson(const lineage::Explanation& explanation) {
       {"replay",
        {{"value", explanation.replayed_value},
         {"matches", explanation.replay_matches},
+        // Which check `matches` reports. A union property is verified by
+        // containment, so the UI can say "contained in the merged list" rather
+        // than implying an exact replay that never happened.
+        {"check", explanation.replay_is_union ? "containment" : "equality"},
         {"error", explanation.replay_error}}},
   };
 }
