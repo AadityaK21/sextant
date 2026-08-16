@@ -4,11 +4,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "coding.h"
 #include "geohash.h"
 #include "normalize.h"
 #include "similarity.h"
@@ -125,6 +128,121 @@ std::string PairScore::Explain() const {
     if (!feature.detail.empty()) out += " (" + feature.detail + ")";
   }
   return out;
+}
+
+// --- the candidate record ---------------------------------------------------
+
+namespace {
+
+constexpr uint8_t kPairScoreVersion = 1;
+constexpr uint8_t kCandidateVersion = 1;
+
+// Doubles go on the wire as their bit pattern rather than as text. A printf
+// round trip through "%.17g" is lossy in the last place often enough to matter
+// when the number is then compared against a threshold.
+void PutDouble(std::string* dst, double value) {
+  uint64_t bits = 0;
+  std::memcpy(&bits, &value, sizeof(bits));
+  lsm::PutFixed64BE(dst, bits);
+}
+
+bool GetDouble(lsm::Slice* input, double* out) {
+  if (input->size() < 8) return false;
+  const uint64_t bits = lsm::DecodeFixed64BE(input->data());
+  std::memcpy(out, &bits, sizeof(*out));
+  input->remove_prefix(8);
+  return true;
+}
+
+bool GetString(lsm::Slice* input, std::string* out) {
+  lsm::Slice piece;
+  if (!lsm::GetLengthPrefixedSlice(input, &piece)) return false;
+  out->assign(piece.data(), piece.size());
+  return true;
+}
+
+}  // namespace
+
+void PairScore::EncodeTo(std::string* dst) const {
+  dst->push_back(static_cast<char>(kPairScoreVersion));
+  PutDouble(dst, score);
+  dst->push_back(static_cast<char>(decision));
+  dst->push_back(static_cast<char>(vetoed ? 1 : 0));
+  lsm::PutLengthPrefixedSlice(dst, lsm::Slice(veto_reason));
+
+  lsm::PutVarint32(dst, static_cast<uint32_t>(features.size()));
+  for (const auto& feature : features) {
+    lsm::PutLengthPrefixedSlice(dst, lsm::Slice(feature.name));
+    PutDouble(dst, feature.value);
+    PutDouble(dst, feature.weight);
+    PutDouble(dst, feature.contribution);
+    lsm::PutLengthPrefixedSlice(dst, lsm::Slice(feature.detail));
+  }
+}
+
+bool PairScore::DecodeFrom(lsm::Slice* input, PairScore* out) {
+  if (input->empty()) return false;
+  const uint8_t version = static_cast<uint8_t>((*input)[0]);
+  if (version != kPairScoreVersion) return false;
+  input->remove_prefix(1);
+
+  *out = PairScore{};
+  if (!GetDouble(input, &out->score)) return false;
+  if (input->size() < 2) return false;
+  out->decision = static_cast<Decision>((*input)[0]);
+  out->vetoed = (*input)[1] != 0;
+  input->remove_prefix(2);
+  if (!GetString(input, &out->veto_reason)) return false;
+
+  uint32_t count = 0;
+  if (!lsm::GetVarint32(input, &count)) return false;
+  out->features.reserve(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    Feature feature;
+    if (!GetString(input, &feature.name)) return false;
+    if (!GetDouble(input, &feature.value)) return false;
+    if (!GetDouble(input, &feature.weight)) return false;
+    if (!GetDouble(input, &feature.contribution)) return false;
+    if (!GetString(input, &feature.detail)) return false;
+    out->features.push_back(std::move(feature));
+  }
+  return true;
+}
+
+void CandidateRecord::EncodeTo(std::string* dst) const {
+  dst->push_back(static_cast<char>(kCandidateVersion));
+  lsm::PutVarint32(dst, a.source);
+  lsm::PutFixed64BE(dst, a.key_hash);
+  lsm::PutVarint32(dst, b.source);
+  lsm::PutFixed64BE(dst, b.key_hash);
+  lsm::PutLengthPrefixedSlice(dst, lsm::Slice(a_label));
+  lsm::PutLengthPrefixedSlice(dst, lsm::Slice(b_label));
+  lsm::PutLengthPrefixedSlice(dst, lsm::Slice(decision));
+  lsm::PutLengthPrefixedSlice(dst, lsm::Slice(reviewer));
+  score.EncodeTo(dst);
+}
+
+bool CandidateRecord::DecodeFrom(lsm::Slice* input, CandidateRecord* out) {
+  if (input->empty()) return false;
+  const uint8_t version = static_cast<uint8_t>((*input)[0]);
+  if (version != kCandidateVersion) return false;
+  input->remove_prefix(1);
+
+  *out = CandidateRecord{};
+  if (!lsm::GetVarint32(input, &out->a.source)) return false;
+  if (input->size() < 8) return false;
+  out->a.key_hash = lsm::DecodeFixed64BE(input->data());
+  input->remove_prefix(8);
+  if (!lsm::GetVarint32(input, &out->b.source)) return false;
+  if (input->size() < 8) return false;
+  out->b.key_hash = lsm::DecodeFixed64BE(input->data());
+  input->remove_prefix(8);
+
+  if (!GetString(input, &out->a_label)) return false;
+  if (!GetString(input, &out->b_label)) return false;
+  if (!GetString(input, &out->decision)) return false;
+  if (!GetString(input, &out->reviewer)) return false;
+  return PairScore::DecodeFrom(input, &out->score);
 }
 
 // --- config -----------------------------------------------------------------

@@ -91,6 +91,42 @@ struct PairScore {
   // to read them in.
   std::vector<Feature> TopContributions(size_t n) const;
   std::string Explain() const;
+
+  // The candidate record written to the CAND keyspace for human review.
+  //
+  // STRUCTURED, NOT THE Explain() STRING.
+  //
+  // The review queue has to show WHICH FEATURE carried a score, because that is
+  // the entire question a reviewer is answering: is +5.2 mostly a name
+  // similarity that happens to be high between two different Italian ports, or
+  // is it a locode match? Storing the rendered sentence would leave the UI
+  // parsing prose that this file generates - a format nothing enforces and any
+  // edit here silently breaks.
+  void EncodeTo(std::string* dst) const;
+  static bool DecodeFrom(lsm::Slice* input, PairScore* out);
+};
+
+// Which two source records a candidate pair refers to, stored alongside the
+// score so the review queue can show them side by side. The CAND key holds
+// only a hash of the pair, which is enough to find the record and not enough
+// to display it.
+struct CandidateRecord {
+  RecordRef a;
+  RecordRef b;
+  std::string a_label;  // rendered at write time: the source knows its own names
+  std::string b_label;
+  PairScore score;
+
+  // A human's answer, when one has been given. Empty means still waiting.
+  //
+  // Stored on the candidate rather than as a separate record because it is an
+  // annotation on this pair, and the next resolver run reads it from exactly
+  // where it already reads the pair.
+  std::string decision;  // "accept", "reject", or empty
+  std::string reviewer;
+
+  void EncodeTo(std::string* dst) const;
+  static bool DecodeFrom(lsm::Slice* input, CandidateRecord* out);
 };
 
 // Weights and thresholds, loaded from schema/resolver.yaml.

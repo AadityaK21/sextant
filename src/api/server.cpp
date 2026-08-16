@@ -15,6 +15,7 @@
 #include "keyspace.h"
 #include "plan.h"
 #include "query.h"
+#include "scorer.h"
 
 namespace sextant::api {
 namespace {
@@ -227,7 +228,9 @@ void Server::Impl::RegisterEntities() {
                      {"confidence", explanation.confidence},
                      {"rejected", explanation.rejected.size()},
                      {"cluster_size", explanation.cluster_size},
-                     {"verified", explanation.replay_matches}};
+                     {"verified", explanation.replay_matches},
+                     {"check", explanation.replay_is_union ? "containment"
+                                                           : "equality"}};
                }
                body["_provenance"] = provenance;
              }
@@ -434,9 +437,38 @@ void Server::Impl::RegisterReview() {
       double score = 0.0;
       uint64_t pair_hash = 0;
       if (!codec::DecodeCandidateKey(iter->key(), &score, &pair_hash)) continue;
-      pairs.push_back({{"pair_id", std::to_string(pair_hash)},
-                       {"score", score},
-                       {"explanation", iter->value().ToString()}});
+
+      json entry = {{"pair_id", std::to_string(pair_hash)}, {"score", score}};
+
+      lsm::Slice payload = iter->value();
+      resolve::CandidateRecord record;
+      if (resolve::CandidateRecord::DecodeFrom(&payload, &record)) {
+        json features = json::array();
+        for (const auto& feature : record.score.TopContributions(12)) {
+          if (feature.contribution == 0.0) continue;
+          features.push_back({{"name", feature.name},
+                              {"value", feature.value},
+                              {"weight", feature.weight},
+                              {"contribution", feature.contribution},
+                              {"detail", feature.detail}});
+        }
+        entry["a"] = {{"source", record.a.source}, {"label", record.a_label}};
+        entry["b"] = {{"source", record.b.source}, {"label", record.b_label}};
+        entry["features"] = features;
+        entry["vetoed"] = record.score.vetoed;
+        entry["veto_reason"] = record.score.veto_reason;
+        entry["explanation"] = record.score.Explain();
+        entry["decision"] = record.decision;
+        entry["reviewer"] = record.reviewer;
+      } else {
+        // A record written before the structured format existed. Say so rather
+        // than dropping the pair, so an old database degrades to less detail
+        // instead of an empty queue.
+        entry["features"] = json::array();
+        entry["explanation"] = payload.ToString();
+        entry["legacy_format"] = true;
+      }
+      pairs.push_back(entry);
     }
     if (!iter->status().ok()) {
       SendError(&res, iter->status());
@@ -492,7 +524,7 @@ void Server::Impl::RegisterReview() {
     // rewriting under a different score would move the record and leave the
     // original in place.
     double score = 0.0;
-    std::string explanation;
+    std::string payload;
     bool found = false;
     auto iter = store->ScanCandidates();
     for (; iter->Valid(); iter->Next()) {
@@ -503,7 +535,7 @@ void Server::Impl::RegisterReview() {
       }
       if (candidate_hash == pair_hash) {
         score = candidate_score;
-        explanation = iter->value().ToString();
+        payload = iter->value().ToString();
         found = true;
         break;
       }
@@ -513,11 +545,26 @@ void Server::Impl::RegisterReview() {
       return;
     }
 
-    const std::string reviewer =
-        body.value("reviewer", std::string("anonymous"));
-    const std::string recorded = explanation + "\nDECISION " + decision + " by " +
-                                 reviewer + "\n";
-    Status s = store->PutCandidate(score, pair_hash, lsm::Slice(recorded));
+    const std::string reviewer = body.value("reviewer", std::string("anonymous"));
+
+    // Decode, annotate, re-encode. Appending text to the payload would have
+    // been shorter and would have made the record undecodable, which is a
+    // strange way to record a decision about it.
+    lsm::Slice input(payload);
+    resolve::CandidateRecord record;
+    if (!resolve::CandidateRecord::DecodeFrom(&input, &record)) {
+      SendError(&res, Status::Corruption(
+                          "candidate " + std::to_string(pair_hash) +
+                          " is in a format this build cannot decode; re-run "
+                          "`sextant resolve` to rewrite the review queue"));
+      return;
+    }
+    record.decision = decision;
+    record.reviewer = reviewer;
+
+    std::string updated;
+    record.EncodeTo(&updated);
+    Status s = store->PutCandidate(score, pair_hash, lsm::Slice(updated));
     if (!s.ok()) {
       SendError(&res, s);
       return;
