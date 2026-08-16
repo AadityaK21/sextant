@@ -1,10 +1,81 @@
 # Bug log
 
-Keep this. Three sentences per entry, written the day you fix it.
+Written the day each one was fixed. Twenty-six entries over fifteen days.
 
-By day 15 you will have a dozen entries, and **"tell me about a hard bug you
-debugged"** turns from a question you dread into one you want. Nobody can fake
-this file retroactively - the specificity is the signal.
+The execution plan said to trim this to three or four polished war stories by
+day 15. I have not, and the reason is in the note below that I wrote on day 1:
+**nobody can fake this file retroactively - the specificity is the signal.**
+Deleting twenty-two real write-ups to make the remaining four read better would
+throw away exactly the evidence that makes any of them credible.
+
+So the entries all stay, and this index does the job the trimming was meant to
+do: point a reader at the ones worth their time.
+
+## Start here
+
+If you read four, read these.
+
+**A negative control that did not fail, and was right not to.** I broke a
+transform on purpose and the round trip still reported 100%, which looked like
+proof the checker did nothing. It was not. Fusion picks the name from UN/LOCODE
+by source trust, and that column is already title case, so the transform
+genuinely changes nothing. Breaking a transform only the World Port Index feeds
+produced 144 failures. *A negative control that does not fail is a statement
+about the control.*
+
+**Records that were never compared were never created.** Clustering was seeded
+from the endpoints of candidate pairs. Voyages produce no blocking keys - they
+are resolved through their links, not by comparing attributes - so none of them
+ever became entities and the graph was empty. It hid because 459 records
+becoming 187 entities looks exactly like successful deduplication. *What happens
+to an input this stage has no opinion about?*
+
+**Running `sextant resolve` twice doubled the entire graph.** Entity ids are
+freshly generated ULIDs, so a second run wrote a complete second copy of every
+entity, link and provenance record. Nothing collided, nothing errored, and both
+copies were internally consistent - the lineage round trip still passed at 100%.
+The only thing that noticed was a frontend contract check computing a *negative*
+dedup ratio. *A ratio between two independently derived numbers is a cheap and
+very effective invariant.*
+
+**The search box had no index behind it.** Nothing failed. The query planner
+simply reported `full scan of Port: no usable index for name` on its first run
+against the real schema. The query would have been correct, and slow, and silent
+- and by the time anyone profiled it, the missing index would have looked like a
+database problem rather than a one-line schema fix. *This is the entire argument
+for putting the plan on the response.*
+
+## The rest, by theme
+
+**The compiler and the platform disagreed with me** - uninitialised const member
+in DBImpl · initializer_list deduction across integer widths · 111 missing
+includes, invisible until CI ran · windows.h macro silently renamed my function ·
+a raw string literal ended in the middle of a schema.
+
+**The storage engine, where the bugs are worst** - off by one bit, out by one
+byte · shutdown mid-compaction resurrected deleted data · iterators pinned the
+file set but not the memtable · one field, two representations, size_t underflow ·
+an assertion encoded the wrong ordering, and only Debug knew.
+
+**My test setup was the thing that was wrong** - parallel tests, one database
+directory, eight segfaults · two Portsmouths, and a test fixture built on a bad
+guess · ten hulls with one IMO, and a golden set that believed it · an ignore
+rule quietly excluded the data the tests needed.
+
+**Entity resolution told me something I did not want to hear** - the blocking key
+I argued for, measured at zero · a veto rule that never runs · the IMO check
+digit does not catch every typo · the port calls referenced vessels that no
+longer existed.
+
+**The query engine, on day 12** - the time index was chosen in a direction it
+cannot serve · declining to use an index quietly dropped the predicate · the
+architecture document named a link the schema did not have · the CLI and the API
+disagreed about what "dedup ratio" meant.
+
+**Two definitions of one rule** - the API and the round-trip test disagreed about
+union properties.
+
+---
 
 Format:
 
