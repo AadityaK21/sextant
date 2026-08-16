@@ -449,26 +449,62 @@ std::unique_ptr<Iterator> DBImpl::NewIterator(const ReadOptions& opts) {
 
   Iterator* merged = NewMergingIterator(internal_comparator_, std::move(children));
 
-  // PIN THE VERSION for the life of the iterator. This is what makes a scan
-  // safe against concurrent compaction: the files it reads cannot be unlinked
-  // until this reference is dropped.
-  current->Ref();
-  merged->RegisterCleanup(
-      [](void* v, void*) { reinterpret_cast<Version*>(v)->Unref(); }, current,
-      nullptr);
+  // PIN THE VERSION AND THE MEMTABLES for the life of the iterator. This is
+  // what makes a scan safe against concurrent compaction: the files it reads
+  // cannot be unlinked, and the arenas it reads out of cannot be freed, until
+  // these references are dropped.
+  //
+  // THE RELEASE MUST HOLD THE MUTEX, AND THAT IS NOT OBVIOUS.
+  //
+  // The first version of this registered three separate cleanups, each a
+  // lambda calling Unref() directly. It looked symmetric with the Ref() calls
+  // above and it was wrong in three ways at once, because a cleanup runs when
+  // the ITERATOR IS DESTROYED - on whatever thread happens to own it, with no
+  // lock held, while the background compaction thread is running.
+  //
+  //   1. `refs_` is a plain int on both Version and MemTable. Two threads
+  //      doing --refs_ concurrently is a data race, and the compaction thread
+  //      touches version refcounts constantly.
+  //
+  //   2. ~Version() unlinks itself from the VersionSet's doubly-linked list:
+  //          prev_->next_ = next_;  next_->prev_ = prev_;
+  //      That list is VersionSet state. Unlinking without the mutex can
+  //      corrupt it while AppendVersion or a compaction is walking it.
+  //
+  //   3. ~Version() also does `if (--f->refs == 0) delete f` over every
+  //      FileMetaData. Those are SHARED between versions, so this is a second
+  //      unsynchronised refcount and a possible double free.
+  //
+  // None of it shows up in a single-threaded test, which is why it survived
+  // until someone read the code rather than ran it.
+  //
+  // So: one cleanup, one state object, and the mutex is taken before any
+  // Unref. This is what LevelDB's CleanupIteratorState does, for exactly these
+  // reasons.
+  struct IterState {
+    std::mutex* mu;
+    MemTable* mem;
+    MemTable* imm;  // may be null
+    Version* version;
+  };
 
-  // Same argument for the memtables: the iterator reads directly out of their
-  // arenas, so a concurrent flush must not be able to free them.
+  current->Ref();
   mem_->Ref();
+  if (imm_ != nullptr) imm_->Ref();
+
+  auto* state = new IterState{&mutex_, mem_, imm_, current};
   merged->RegisterCleanup(
-      [](void* m, void*) { reinterpret_cast<MemTable*>(m)->Unref(); }, mem_,
-      nullptr);
-  if (imm_ != nullptr) {
-    imm_->Ref();
-    merged->RegisterCleanup(
-        [](void* m, void*) { reinterpret_cast<MemTable*>(m)->Unref(); }, imm_,
-        nullptr);
-  }
+      [](void* arg1, void*) {
+        auto* s = static_cast<IterState*>(arg1);
+        {
+          std::lock_guard<std::mutex> guard(*s->mu);
+          s->mem->Unref();
+          if (s->imm != nullptr) s->imm->Unref();
+          s->version->Unref();
+        }
+        delete s;
+      },
+      state, nullptr);
 
   return std::unique_ptr<Iterator>(
       NewDBIterator(internal_comparator_, merged, snapshot));
