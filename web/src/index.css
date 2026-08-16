@@ -1,0 +1,55 @@
+@import 'tailwindcss';
+
+/* A dark instrument-panel palette, named once so the components use semantic
+   names rather than raw hex. The point is not the aesthetic; it is that
+   changing the theme is one file. */
+@theme {
+  --color-ink: #0b0f14;
+  --color-panel: #121821;
+  --color-raised: #1a2230;
+  --color-edge: #26303f;
+  --color-dim: #7d8ba1;
+  --color-body: #d7e0ea;
+  --color-accent: #4aa8ff;
+  --color-good: #3ecf8e;
+  --color-warn: #f0b429;
+  --color-bad: #f2617a;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: #0b0f14;
+  color: #d7e0ea;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+code,
+pre,
+.mono {
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas,
+    monospace;
+}
+
+/* The raw-row table can be very wide. Let it scroll rather than wrap, because
+   a source row's column alignment is the thing the reader is checking. */
+.scroll-x {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #26303f;
+  border-radius: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
