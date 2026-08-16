@@ -1,6 +1,6 @@
 // Concurrent skiplist: one writer, many lock-free readers.
 //
-// WHY A SKIPLIST AND NOT A RED-BLACK TREE - the interview answer:
+// WHY A SKIPLIST AND NOT A RED-BLACK TREE:
 //
 //   1. Concurrency.  A balanced tree rebalances by ROTATING, which mutates
 //      pointers that readers are actively walking.  You would need a lock or

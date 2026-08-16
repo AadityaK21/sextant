@@ -22,7 +22,7 @@ Most student projects that attempt this become seven disconnected demos. The thi
 
 Entities, links, provenance, secondary indexes, blocking indexes, raw records - all of it is bytes in one keyspace, laid out so the access pattern you need is a *sequential range scan*. Graph traversal isn't a separate subsystem; it's a prefix scan. Time-windowed queries aren't a filter; they're a range scan over a big-endian timestamp suffix.
 
-When an interviewer asks "how does the whole thing fit together," this is your answer. Lead with it.
+Everything below is an elaboration of this one idea.
 
 ---
 
@@ -245,7 +245,7 @@ One byte of keyspace prefix, then a fixed layout. All integers big-endian so byt
 
 - **`LINKOUT` prefix scan** `0x04 ‖ eid ‖ link_type` returns every outgoing edge of one type as a contiguous range. That is your entire graph traversal engine, and it's *one sequential read*.
 - **`LINKIN` is a deliberate denormalisation.** You store every edge twice. Cost: 2× link storage. Benefit: reverse traversal ("which voyages arrived *at* this port") is as cheap as forward. Be ready to defend this trade - it's a real one.
-- **`TIDX` is why the quarter-query is fast.** `0x0A ‖ arrives_at ‖ rotterdam_eid ‖ ts` with a big-endian timestamp means "all voyages into Rotterdam between April and July" is a *range scan over a contiguous byte range*, not a scan-and-filter. Say exactly this in the interview.
+- **`TIDX` is why the quarter-query is fast.** `0x0A ‖ arrives_at ‖ rotterdam_eid ‖ ts` with a big-endian timestamp means "all voyages into Rotterdam between April and July" is a *range scan over a contiguous byte range*, not a scan-and-filter.
 - **`CAND` uses inverted score** (`UINT32_MAX − score`) as the key prefix, so scanning the review queue naturally returns the most-uncertain pairs first.
 - **`PROV` versioned by LSM sequence number** means provenance history is append-only and ordered for free.
 - **`INGEST` exists because `RAW` is append-only.** That immutability is what makes lineage permanent, and it is also why the archive has no opinion about duplication: run the same ingest twice and you get two copies of every row with no way to tell afterwards. A manifest per batch - including a fingerprint of the input bytes - makes a repeated ingest of an unchanged file a no-op, while a *changed* file still gets a new batch and never overwrites the old one.
@@ -456,7 +456,7 @@ score < 2.0    →  NO MATCH
 
 **Do not skip the review band.** A system that admits uncertainty and routes it to a human is what a production data platform actually does. It's also the cheapest way to look mature.
 
-> **Interview ammunition:** this weighted-sum scorer is a hand-tuned approximation of the **Fellegi-Sunter** probabilistic record linkage model (1969), where each feature contributes `log(m_i/u_i)` - the log-likelihood ratio of agreement given a match vs. given a non-match. Saying this shows you know there's a literature and you chose a pragmatic point in it. You can even fit `m` and `u` from your labeled set with EM if you want a stretch goal.
+> **Where this sits in the literature.** The weighted-sum scorer is a hand-tuned approximation of the **Fellegi-Sunter** probabilistic record linkage model (1969), in which each feature contributes `log(m_i/u_i)` - the log-likelihood ratio of agreement given a match against agreement given a non-match. Fitting `m` and `u` from the labeled set with EM would make that correspondence exact rather than approximate, and is the natural next step if the golden set grows enough to support it.
 
 ### 7.4 Clustering - and the trap
 
@@ -576,7 +576,7 @@ TEST(Lineage, RoundTripsForEveryProperty) {
 }
 ```
 
-If this passes over your full dataset, your lineage is not decoration - it is a **verified invariant**. Lead your README with it. Lead your interview with it.
+Passing this over the full dataset is what separates lineage from decoration: it makes it a **verified invariant** rather than a record nobody has checked.
 
 ### The rest of the test suite
 
@@ -632,7 +632,7 @@ Return a `_stats` block on every response:
             "index_used": "TIDX", "elapsed_us": 3105 }
 ```
 
-Exposing your own cost accounting is a small thing that makes the system read as an *engine* rather than a script. Interviewers notice.
+Exposing the cost accounting is what makes a performance regression visible at the moment it happens rather than months later in a profiler. It is also the difference between claiming a query is a range scan and being able to show it.
 
 ---
 
@@ -642,7 +642,7 @@ Vite + React + TypeScript. Keep it thin - the backend is the project.
 
 | View | Notes |
 |---|---|
-| **Type browser** | Rendered entirely from `/api/ontology`. Add an entity type to the YAML → it appears in the UI with zero frontend changes. Demo this live; it lands hard. |
+| **Type browser** | Rendered entirely from `/api/ontology`. Add an entity type to the YAML → it appears in the UI with zero frontend changes. |
 | **Entity detail** | Property table; each value has an ⓘ affordance opening the lineage drawer. |
 | **Lineage drawer** | Raw row as a table with the source column highlighted → transform chain as named pills → fusion rule → **rejected alternatives** → merge evidence with per-feature contributions. |
 | **Link explorer** | Force-directed graph (`react-force-graph` or Cytoscape). Click a node to expand its neighbourhood. |
@@ -695,7 +695,7 @@ sextant/
 ├── web/                         # React app
 ├── docs/
 │   ├── adr/                     # architecture decision records - 1 page each
-│   ├── BUGS.md                  # keep this. see the interview guide.
+│   ├── BUGS.md                  # every bug worth writing down, as it was fixed
 │   └── diagrams/
 └── docker-compose.yml           # Postgres for source C
 ```
@@ -724,7 +724,9 @@ Standard: **C++20**. You want `std::span`, designated initialisers, concepts for
 
 ## 14. Deliberate non-goals
 
-State these in your README. Knowing what you *didn't* build, and why, is a maturity signal - and it pre-empts the interviewer catching you out.
+Each of these is a real capability the system does not have. They are listed
+here, and in the README, because a boundary that is written down is a decision
+and a boundary that is not is an oversight.
 
 - **No distribution.** Single node. Sharding the LSM and doing distributed ER is a different project.
 - **No ML-based ER.** A hand-tuned Fellegi-Sunter-style scorer is interpretable and tunable on 500 labels. A learned model needs 10⁵ and gives you worse lineage.
@@ -734,18 +736,25 @@ State these in your README. Knowing what you *didn't* build, and why, is a matur
 
 ---
 
-## 15. Numbers to put on your CV
+## 15. What it measures
 
-Fill these in as you build; each one should be reproducible with a command in your README.
+Every number here is produced by a command, not recorded by hand. The full
+conditions - hardware, configuration, value sizes - are stated next to each one
+in [`BENCH.md`](BENCH.md) and [`ER.md`](ER.md), because a throughput figure
+without its configuration is not a measurement.
 
-- `N` million AIS records ingested across 3 heterogeneous sources
-- `X` source records → `Y` resolved entities (dedup ratio `X/Y`)
-- Entity resolution **F1 = 0.9x** on a 500-pair hand-labeled set; blocking RR `0.999x`, PC `0.98x`
-- LSM: `Z`k writes/sec, point-read p99 `< N` µs, space amplification `1.x`
-- Quarter-window traversal: `N` ms over `M` voyages
-- **100% of resolved property values pass the lineage round-trip test**
+| | |
+|---|---|
+| **Lineage** | 4,201 of 4,201 resolved properties pass the round-trip test. 100%. |
+| **Entity resolution** | F1 **0.9912** on a held-out split the weights were never fitted to; 1.0000 on vessels |
+| **Blocking** | RR **0.999**, PC **0.997** - 1.05M possible pairs reduced to a few hundred, losing one true pair in a thousand |
+| **Clustering** | Veto-constrained precision **1.000** against plain transitive **0.973**, with 10 merges refused |
+| **Storage** | 1.53M batched writes/sec · 494k random writes/sec · 3.7M misses/sec · write amplification **1.20x** · 655 writes/sec with `sync=true` |
+| **Query** | The quarter query: 24 arrivals, **24 keys scanned**, `index_used: "TIDX"`, 230 µs end to end over HTTP |
+| **Resolution** | 1,451 source records → 1,187 entities; 451 port and vessel records → 187, so 58% of them were duplicates |
 
-That last bullet is the one that's actually rare. Put it first.
+The first row is the one that is genuinely uncommon. Most systems that claim
+lineage record it; this one checks it, and the check can fail.
 
 ---
 

@@ -838,9 +838,5 @@ would have been the thing people believed.
 
 ---
 
-<!-- Add entries as you go. Suggested candidates from the plan:
-     - the first tombstone resurrection you hit once SSTables land (day 2-4)
-     - whatever the lineage round-trip test catches on day 11 (it will catch
-       something - usually a transform that is not actually pure)
-     - the transitive-chaining over-merge in entity resolution (day 10)
--->
+<!-- New entries go at the bottom, dated, in the format above. -->
+

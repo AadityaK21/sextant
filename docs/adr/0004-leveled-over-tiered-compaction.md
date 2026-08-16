@@ -56,11 +56,11 @@ measurement, not evidence that leveling is free.
 ## Alternatives considered
 
 **Size-tiered.** Would make ingest faster and is materially simpler to
-implement: pick N files of similar size, merge them, done. It was on the cut
-list in `docs/EXECUTION_PLAN.md` as item 3, to be dropped to if the schedule
-slipped. It did not slip. Had it been taken, the honest framing would have been
-"faster ingest, slower and more variable point lookups, and up to 2x transient
-disk use during a major compaction".
+implement: pick N files of similar size, merge them, done. It was the identified
+fallback if leveled compaction turned out to be too much work, and remains the
+right answer for a write-dominated workload. Taking it would have meant
+accepting "faster ingest, slower and more variable point lookups, and up to 2x
+transient disk use during a major compaction".
 
 **Hybrid: tiered at L0, leveled below.** This is in fact what is implemented,
 and it is not really an alternative so much as the standard shape. L0 must

@@ -61,7 +61,8 @@ check.
 | **Days 13-14** - React frontend, lineage drawer, link graph, review queue | ✅ | 413 tests green |
 | **Day 15** - one-command demo, ADRs, crash test, 10⁶-op differential | ✅ | 415 tests green |
 
-Plan: [`docs/EXECUTION_PLAN.md`](docs/EXECUTION_PLAN.md).
+What each milestone produced, and where the implementation departed from the
+design: [`docs/STATUS.md`](docs/STATUS.md).
 
 ---
 
@@ -212,10 +213,9 @@ not a filter - it is a range scan over a big-endian timestamp suffix
    src/lsm/        WAL · MemTable · SSTable · Compaction        built
 ```
 
-Every directory in that diagram now exists and is tested. The status table and
-`git log` remain the honest account of what is here; the architecture document
-describes the design, some of which is still ahead of the code (Day 15 items
-are listed in `docs/EXECUTION_PLAN.md`).
+Every directory in that diagram exists and is tested. The architecture document
+describes the design; [`docs/STATUS.md`](docs/STATUS.md) records what was
+actually built, what it measured, and the places the two differ.
 
 Full design: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -350,8 +350,8 @@ correct on one thread and wrong the moment a second request or a background
 compaction moved the same counters - which is the worst kind of bug, because it
 does not show up in the test that made you confident.
 
-The claim `keys_scanned: 24` for 24 results is what an interviewer should be
-invited to check, so there is a test that checks it a second way: the same
+The claim `keys_scanned: 24` for 24 results is the kind that deserves a second
+opinion, so there is a test that gets one: the same
 window resolved through the time index and through a full adjacency scan is
 asserted to return **the same 24 voyages** out of 92 total arrivals. An
 off-by-one bound would return a plausible number of rows quickly and pass every
@@ -380,8 +380,7 @@ Stated up front, because knowing what you didn't build is part of the design.
 | | |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Full design: keyspaces, LSM internals, ER algorithm, lineage model, query API |
-| [`docs/EXECUTION_PLAN.md`](docs/EXECUTION_PLAN.md) | Day-by-day build order, cut lines, risk register |
-| [`docs/INTERVIEW_PREP.md`](docs/INTERVIEW_PREP.md) | Every design decision, the alternative rejected, and the cost |
+| [`docs/STATUS.md`](docs/STATUS.md) | What is built, what it measured, and where the code departed from the design |
 | [`docs/BENCH.md`](docs/BENCH.md) | Benchmarks and what they mean |
 | [`docs/ER.md`](docs/ER.md) | Entity resolution: golden-set methodology, blocking results, what the numbers do and do not prove |
 | [`docs/BUGS.md`](docs/BUGS.md) | Every bug worth writing down, with what it cost and what it taught |

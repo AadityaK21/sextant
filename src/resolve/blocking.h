@@ -23,8 +23,8 @@
 // They trade against each other and either one alone can be gamed. Quoting RR
 // without PC is the classic way to make a blocking scheme sound good.
 //
-// PC IS A CEILING, NOT A SCORE. This is the point worth being clear about in
-// an interview: everything downstream can only lose recall from here. If PC is
+// PC IS A CEILING, NOT A SCORE. Everything downstream can only lose recall
+// from here, never regain it. If PC is
 // 0.94, then 6% of true duplicates are already gone before the scorer has seen
 // a single feature, and no amount of weight tuning will get them back.
 //

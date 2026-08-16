@@ -20,7 +20,7 @@
 //               graph traversal, which must see a consistent graph across
 //               thousands of key lookups.
 //
-// Interview trap to be ready for: why can't a tombstone be dropped as soon as
+// THE SUBTLE PART: why can't a tombstone be dropped as soon as
 // compaction sees it?  Because an older version of the same user key may still
 // live in a lower level.  Drop the tombstone above it and the deleted value
 // RESURRECTS.  Tombstones may only be dropped when compacting into the bottom

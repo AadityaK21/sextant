@@ -73,8 +73,9 @@ one source for a field, "which source won and why" has no content.
 ## Alternatives considered
 
 **Dataset-level lineage.** Cheap, standard, and answers a different question.
-Would have been dishonest to build and then describe as lineage in a README, and
-an interviewer who has used both would spot the gap in one follow-up.
+Building it and then describing it as lineage would be a claim the
+implementation does not support: anyone who has used both would find the gap on
+their first real question.
 
 **Recording provenance and trusting it.** This is what most implementations do,
 and it is what this one did until the round-trip test was written. Writing the

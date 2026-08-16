@@ -1,6 +1,6 @@
 // Status: the engine's error type.
 //
-// Design note for the interview: this is deliberately not exceptions.  A
+// Deliberately not exceptions.  A
 // storage engine's hot path (Get, iterator Next) must be allocation-free and
 // branch-predictable, and "key not found" is an ordinary control-flow outcome,
 // not an exceptional one.  Status costs one pointer when OK - the common case

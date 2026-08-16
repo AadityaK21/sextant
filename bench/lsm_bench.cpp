@@ -1,10 +1,10 @@
 // Storage engine benchmarks.
 //
 // Numbers from this program go straight into docs/BENCH.md and the README.
-// Run it, record the output, and re-run it after each milestone so you can
-// show what SSTables and compaction cost you. "Writes got 3x slower when I
-// added leveled compaction, and here is why" is a far better interview answer
-// than a single number with no history.
+// Re-run after each milestone and keep the output. A single number with no
+// history says nothing; a series says what each piece of the engine cost. The
+// read regression when SSTables landed, and its recovery when bloom filters
+// did, are only visible if both were measured.
 
 #include <algorithm>
 #include <chrono>
@@ -245,8 +245,8 @@ int main(int argc, char** argv) {
               static_cast<unsigned long long>(session.write_stalls));
   if (session.bytes_written > 0) {
     // Write amplification: bytes actually put on disk per byte the caller
-    // handed us. This is the price of leveled compaction, and the number an
-    // interviewer will ask for.
+    // handed us. This is the price of leveled compaction, and the number that
+    // decides whether the choice was worth it.
     std::printf("  write amp      : %.2fx\n",
                 static_cast<double>(session.bytes_flushed +
                                     session.compaction_bytes_written) /

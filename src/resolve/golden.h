@@ -3,8 +3,9 @@
 // WHY THIS FILE IS SHORT AND THE COMMENT IS LONG
 //
 // Loading a CSV of labeled pairs is trivial. What matters is what the labels
-// mean, and that is the part an interviewer will press on, so it is written
-// down here rather than left as folklore.
+// MEAN - who decided, on what evidence, and what the set does not cover. Every
+// number this project reports about entity resolution rests on that, so it is
+// written down here rather than left as folklore.
 //
 // WHERE THE LABELS COME FROM
 //

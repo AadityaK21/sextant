@@ -45,8 +45,8 @@
 // With no statistics, "most selective predicate" is guesswork. The planner
 // ranks by what the schema knows - a unique_hint property beats a plain indexed
 // one, equality beats prefix - and the plan says the ranking was a heuristic
-// rather than an estimate. Claiming a cardinality estimate here without
-// histograms would be a lie that an interviewer could catch in one question.
+// rather than an estimate. Calling it a cardinality estimate without histograms
+// to back it would be claiming a precision the planner does not have.
 
 #pragma once
 

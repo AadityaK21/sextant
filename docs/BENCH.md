@@ -8,9 +8,10 @@ cmake --build build -j
 ./build/bench/lsm_bench 200000 100      # 200k entries, 100-byte values
 ```
 
-Re-run after every milestone and keep the history. *"Writes got 3× slower when
-I added leveled compaction, and here is why"* is a far better interview answer
-than one number with no context.
+Re-run after every milestone and keep the history. One number with no context
+says nothing; a series says what each piece of the engine cost. The read
+regression when SSTables landed, and its recovery when bloom filters did, are
+only visible because both were measured.
 
 ---
 

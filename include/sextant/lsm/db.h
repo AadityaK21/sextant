@@ -2,14 +2,14 @@
 //
 // Deliberately small: this is the contract every layer above codes against
 // (codec, ontology, resolve, lineage, query). Keeping it narrow is what lets
-// the engine's internals change - memtable-only today, SSTables and leveled
-// compaction on day 4 - without touching a line of the ontology layer.
+// the engine's internals change - it grew from memtable-only to SSTables,
+// bloom filters, a block cache and leveled compaction - without touching a
+// line of the ontology layer above it.
 //
-// MILESTONE STATUS (docs/EXECUTION_PLAN.md)
-//   Day 1  ✅ memtable + WAL + recovery
-//   Day 2  ✅ SSTable build/read, flush to L0   <- you are here
-//   Day 3  ⬜ bloom filters, block cache, merging iterator
-//   Day 4  ⬜ VersionSet/MANIFEST, leveled compaction
+// Everything behind this interface: a WAL with crash recovery, a lock-free
+// skiplist memtable, SSTables with prefix-compressed blocks and bloom filters,
+// a sharded LRU block cache, MANIFEST-backed versioning, and leveled compaction
+// on a background thread.
 
 #pragma once
 

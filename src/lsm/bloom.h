@@ -17,7 +17,7 @@
 // Ten bits per key to avoid ~99% of pointless disk reads is one of the best
 // trades available in systems work.
 //
-// IMPLEMENTATION NOTE worth mentioning in an interview: we do not compute
+// IMPLEMENTATION NOTE: we do not compute
 // seven independent hashes. Kirsch-Mitzenmacher ("Less Hashing, Same
 // Performance", 2006) showed that g_i(x) = h1(x) + i*h2(x) has no asymptotic
 // penalty in false-positive rate. So we take ONE 32-bit hash and derive the

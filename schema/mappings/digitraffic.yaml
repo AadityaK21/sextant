@@ -7,7 +7,7 @@
 # Voyage entity, with departs_from and arrives_at already implied. You are not
 # inventing a link type to have something to traverse.
 #
-# REPRODUCIBILITY RULE (docs/EXECUTION_PLAN.md, day 7): snapshot every response
+# REPRODUCIBILITY RULE (see docs/adr/0003-snapshot-first-connectors.md): snapshot every response
 # to data/snapshots/digitraffic/<batch_id>/ on first fetch and replay from disk
 # afterwards. Your build must not depend on a live network, and lineage that
 # points at a response you can no longer produce is not lineage.
