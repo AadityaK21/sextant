@@ -700,6 +700,73 @@ does not match the number in the README.
 
 ---
 
+## Running `sextant resolve` twice doubled the whole graph            2026-08-16
+
+**Symptom.** A frontend contract check computed a **negative** dedup ratio:
+
+```
+FAIL /api/stats: dedup_ratio -0.6361130254996554 is not a fraction removed
+```
+
+`/api/stats` then said 288 Ports, 86 Vessels and 2,000 Voyages, against 1,451
+source records. Every count was exactly double.
+
+**Root cause.** `sextant resolve` had been run twice on the same database. An
+entity's id is `Ulid::Generate()` - a fresh random id per run - so the second
+run wrote a complete second copy of every entity, link, index entry and
+provenance record beside the first. Nothing collided, nothing errored, and both
+copies were internally consistent.
+
+It hid because every individual number stayed plausible. The lineage round trip
+still passed at 100%, because both copies replay correctly. The quarter query
+still returned arrivals. Only a ratio between two independently derived
+quantities went somewhere impossible.
+
+**Fix.** `Store::ClearKeyspace`, called on the eight derived keyspaces before a
+resolve writes anything. Resolution is a full recompute by design - the README
+says so under non-goals - and a full recompute has to REPLACE its output.
+
+Two details worth the words. It runs *before* the scoring loop rather than next
+to the entity writes, because that loop writes the review queue as it goes and
+clearing afterwards would erase what the run had just built. And
+`ClearKeyspace` refuses RAW, SRCREC and INGEST outright rather than trusting
+every future caller to keep the list right: RAW is the only copy of what the
+source said, and lineage points at it.
+
+**Lesson.** A ratio between two independently derived numbers is a cheap and
+very effective invariant. Every count involved was individually believable;
+only their relationship was impossible. Worth adding one to any pipeline that
+reports totals.
+
+---
+
+## The API and the round-trip test disagreed about union properties  2026-08-16
+
+**Symptom.** `/api/entities/{id}` reported `"verified": false` for `alt_names`
+while `sextant explain` reported 100% of properties verified, for the same
+entity at the same moment.
+
+**Root cause.** Two implementations of one rule. `LineageReader::Explain()`
+compared the replayed value to the stored value with `==`. `RoundTrip()`
+special-cased union properties and checked containment instead, because
+`alt_names` is the merge of every alias every source contributed and no single
+raw cell can reproduce the whole list.
+
+Both were right about their own case. Only one of them was on the API.
+
+**Fix.** The containment rule moved into `Explain()`, so both callers get it
+from one place, and `Explanation` gained `replay_is_union` so the UI can say
+*which* check passed rather than implying every green tick means the same
+thing. The drawer now shows "verified by containment" with a sentence
+explaining what that means.
+
+**Lesson.** The bug was introduced by writing the rule where it was first
+needed rather than where it belonged. The README would have carried a claim of
+100% next to a UI drawing a red mark on a value that was fine - and the UI
+would have been the thing people believed.
+
+---
+
 <!-- Add entries as you go. Suggested candidates from the plan:
      - the first tombstone resurrection you hit once SSTables land (day 2-4)
      - whatever the lineage round-trip test catches on day 11 (it will catch

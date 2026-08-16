@@ -29,7 +29,7 @@ C++20 · React · no storage dependencies
 | **Days 9-10** - scoring, clustering, fusion | ✅ | 370 tests green |
 | **Day 11** - link resolution, lineage, round-trip test | ✅ | 376 tests green |
 | **Day 12** - query planner, executor, cost accounting, HTTP API | ✅ | 410 tests green |
-| Days 13-14 - React frontend | ⬜ | |
+| **Days 13-14** - React frontend, lineage drawer, link graph, review queue | ✅ | 413 tests green |
 | Day 15 - polish, demo, remaining ADRs | ⬜ | |
 
 Plan: [`docs/EXECUTION_PLAN.md`](docs/EXECUTION_PLAN.md).
@@ -75,6 +75,16 @@ with no network and no downloads.
     --link arrivals --from 2026-04-01T00:00:00Z --to 2026-07-01T00:00:00Z
 ./build/src/cli/sextant serve                       # the query API on :8080
 ```
+
+The frontend is a separate step, and one binary serves both:
+
+```bash
+cd web && npm install && npm run build && cd ..
+./build/src/cli/sextant serve --static web/dist     # app and API on :8080
+```
+
+For frontend work, `npm run dev` runs Vite on :5173 and proxies `/api` to the
+binary, so both hot-reload independently.
 
 ```
 lineage round trip
@@ -161,8 +171,7 @@ not a filter - it is a range scan over a big-endian timestamp suffix
 (see [ADR 0002](docs/adr/0002-big-endian-key-encoding.md)).
 
 ```
-   web/            React - browse entities, links, lineage      NOT BUILT (days 13-14)
-  ─────────────────────────────────────────────────────────────────────────────────
+   web/            React - type browser · lineage drawer · link graph · review   built
    src/api/        HTTP routes · JSON · CORS · snapshot per request   built
    src/query/      planner · index selection · executor · cost        built
    src/lineage/    provenance reader · round-trip verification  built
@@ -174,10 +183,10 @@ not a filter - it is a range scan over a big-endian timestamp suffix
    src/lsm/        WAL · MemTable · SSTable · Compaction        built
 ```
 
-**The directory above the line does not exist yet.** It is the plan, not the
-code, and this diagram says so rather than letting the architecture imply a
-completeness the repository does not have. `git log` and the status table are
-the honest account of what is here; everything else is a design document.
+Every directory in that diagram now exists and is tested. The status table and
+`git log` remain the honest account of what is here; the architecture document
+describes the design, some of which is still ahead of the code (Day 15 items
+are listed in `docs/EXECUTION_PLAN.md`).
 
 Full design: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -222,7 +231,7 @@ what the engine does when durability is actually required.
 | Storage engine | 1.53M batched writes/sec · 494k random writes/sec · 3.7M misses/sec · write amplification **1.20x** |
 | | 655 writes/sec with `sync=true` - the fsync floor, quoted so the batched number is not read as a durability figure |
 | | Recovery bounded by buffer size, not data size: 2,013 records replayed instead of 202,200 |
-| Correctness | 410 tests green on Linux, Windows and macOS · clean under ASan + UBSan · lock-free skiplist clean under ThreadSanitizer |
+| Correctness | 413 tests green on Linux, Windows and macOS · clean under ASan + UBSan · lock-free skiplist clean under ThreadSanitizer |
 | | Differential test: 60k random ops vs `std::map`, forced across ~40 flushes and many SSTables |
 | | Torn-WAL recovery: every acknowledged write survives a truncated log tail |
 | | Block and SSTable CRCs reject single-bit corruption |
@@ -254,6 +263,10 @@ what the engine does when durability is actually required.
 | | Cost comes from a `ReadStats` the request owns, threaded into the storage engine, so it is this query's cost even with a compaction running underneath |
 | | An indexed lookup reads **1 key** where the equivalent scan reads 144 |
 | | The plan's warning found a real schema gap on its first run: the search box had no index behind it |
+| Frontend | Vite + React + TypeScript, **no entity type or property named anywhere in the code** - the only occurrences in `web/src` are comments explaining that fact. Add a type to the YAML and it appears with its properties, links and lineage |
+| | The lineage drawer: raw row with the source column highlighted, the transform chain as pills, the fusion rule, what lost and why, and the replay verdict recomputed on every open |
+| | Force-directed link graph in ~120 lines of plain SVG, no graph library |
+| | `npm run check:api` walks a live server and asserts every field the frontend relies on exists and is the declared kind - **162 field checks**, the join `tsc` cannot verify |
 
 ### The result that matters most
 
