@@ -13,6 +13,15 @@ That is literally entity resolution.*
 
 C++20 · React · no storage dependencies
 
+> **Provenance.** The storage engine is a **reimplementation of LevelDB's
+> design**, not an original one. The record format, internal key layout,
+> version and MANIFEST scheme and compaction picker are all Google's; the
+> skiplist is close to a port. What is mine is the twelve-keyspace ontology
+> layer on top, the resolver, the lineage model and the query planner - and the
+> decision to rebuild the engine underneath rather than link RocksDB, which is
+> [ADR 0001](docs/adr/0001-lsm-over-btree.md). Reimplementing a known-good
+> design is a good way to learn one; it is not the same as inventing it.
+
 ```bash
 git clone https://github.com/AadityaK21/sextant && cd sextant && make demo
 ```
@@ -60,6 +69,7 @@ check.
 | **Day 12** - query planner, executor, cost accounting, HTTP API | ✅ | 410 tests green |
 | **Days 13-14** - React frontend, lineage drawer, link graph, review queue | ✅ | 413 tests green |
 | **Day 15** - one-command demo, ADRs, crash test, 10⁶-op differential | ✅ | 415 tests green |
+| **Post-review** - iterator refcount race, TSan build, honest scope claims | ✅ | 418 tests green |
 
 What each milestone produced, and where the implementation departed from the
 design: [`docs/STATUS.md`](docs/STATUS.md).
@@ -239,7 +249,28 @@ All free, all open, all genuinely messy - the duplication is real, not seeded.
 
 ## Results
 
-Filled in as milestones land. Every number here is reproducible with a command.
+Every number here is reproducible with a command. Before any of them:
+
+> **What these numbers are, and what they are not.**
+>
+> The storage figures are **microbenchmarks on synthetic keys, on one machine**.
+> 1.53M writes/sec means one process writing 100-byte values into a warm page
+> cache with `sync=false`. It is a useful number for comparing this engine
+> against itself across milestones - which is what it was built for, and why the
+> read regression when SSTables landed is recorded next to its recovery. It is
+> **not a scale story**, and it says nothing about behaviour on a working set
+> that does not fit in RAM, under concurrent load, or on real hardware with a
+> real I/O queue. None of those have been measured.
+>
+> The entity-resolution figures come from a **generated corpus with ground truth
+> by construction** - each record carries a hidden truth id, and the golden set
+> is derived from it rather than hand-labeled by a domain expert. That is a real
+> evaluation of whether the resolver recovers identity from noisy attributes,
+> and it is not evidence about a messy production dataset whose duplicates were
+> not designed. [`docs/ER.md §1`](docs/ER.md) sets out exactly what it does and
+> does not establish, and §9 lists the limitations.
+>
+> The largest corpus this has run on is **1,451 source records**.
 
 **Read the conditions before the numbers.** All storage figures below come from
 one command - `./build/bench/lsm_bench 200000 100` - on **one machine**: a Linux
@@ -398,11 +429,17 @@ Stated up front, because knowing what you didn't build is part of the design.
 | [ADR 0006](docs/adr/0006-bidirectional-link-storage.md) | Every link stored twice, and why both writes must be one batch |
 | [ADR 0007](docs/adr/0007-cell-level-lineage.md) | Cell-level lineage verified by replay, rather than a DAG of boxes |
 
-### Four bugs worth reading
+### Five bugs worth reading
 
-The full log is [`docs/BUGS.md`](docs/BUGS.md). These four are the ones that
+The full log is [`docs/BUGS.md`](docs/BUGS.md). These five are the ones that
 say something:
 
+- **[An iterator released its refcounts without the mutex.](docs/BUGS.md)** The
+  cleanup that drops a pinned Version runs on the iterator's thread, with no
+  lock. Three races in one, including `~Version` unlinking itself from a shared
+  list. TSan gives 51 warnings and two use-after-frees on the unfixed code; 418
+  tests, ASan and UBSan all said nothing, because none of them ran the
+  background thread.
 - **[The negative control that did not fail.](docs/BUGS.md)** Breaking a
   transform left the round trip at 100%, which looked like the checker doing
   nothing. It was not: fusion picks the source whose column is already in that

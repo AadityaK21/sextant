@@ -1,5 +1,26 @@
 # Benchmarks
 
+> **These are microbenchmarks, and their purpose is comparison against
+> themselves.**
+>
+> One process, synthetic sequential and random keys, fixed 100-byte values, a
+> warm page cache, `sync=false`, on one machine. That configuration is chosen to
+> isolate the engine's own cost so that the effect of each milestone is visible
+> - which is the job it does well, and the reason the read regression on day 2
+> is recorded here next to its recovery on day 3.
+>
+> It is not a throughput claim about anything else. Nothing here has been
+> measured with a working set larger than RAM, under concurrent readers and
+> writers, on a real storage device under queue depth, or against a workload
+> whose key distribution was not chosen by the benchmark. Those are the
+> conditions that decide whether a storage engine is any good, and they are all
+> future work.
+>
+> The one number that is a genuine claim about durability is the `sync=true`
+> figure, because an fsync is a device round-trip that no amount of CPU work
+> avoids. It is 655 writes/sec, and it is the number to quote when durability
+> is the question.
+
 Reproduce with:
 
 ```bash

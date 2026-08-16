@@ -1,11 +1,11 @@
 # Bug log
 
-Written the day each one was fixed. Twenty-six entries over fifteen days.
+Written the day each one was fixed. Twenty-seven entries over fifteen days.
 
 The execution plan said to trim this to three or four polished war stories by
 day 15. I have not, and the reason is in the note below that I wrote on day 1:
 **nobody can fake this file retroactively - the specificity is the signal.**
-Deleting twenty-two real write-ups to make the remaining four read better would
+Deleting twenty-three real write-ups to make the remaining four read better would
 throw away exactly the evidence that makes any of them credible.
 
 So the entries all stay, and this index does the job the trimming was meant to
@@ -13,7 +13,25 @@ do: point a reader at the ones worth their time.
 
 ## Start here
 
-If you read four, read these.
+If you read five, read these.
+
+**An iterator released its references without the mutex.** `DBImpl::NewIterator`
+pins a Version and both memtables so a concurrent compaction cannot delete the
+files or arenas the scan is reading. It released them with three separate
+cleanup callbacks, each calling `Unref()` directly - and a cleanup runs when the
+iterator is DESTROYED, on whatever thread owns it, with no lock held.
+
+Three races in one: `refs_` is a plain `int` on both types; `~Version()` unlinks
+itself from the VersionSet's shared linked list; and `~Version()` also drops
+refcounts on `FileMetaData` shared with other versions. Under ThreadSanitizer
+the unfixed code produces **51 warnings including two `heap-use-after-free`s**
+in `Slice::compare` and `GetVarint32Ptr`, and aborts.
+
+It survived 418 tests, a clean ASan run and a clean UBSan run, because none of
+them look at cross-thread ordering. The fix is one cleanup holding one state
+object, taking the mutex before any `Unref` - which is what LevelDB's
+`CleanupIteratorState` does, for exactly these reasons. *An engine with a
+background thread needs a test that runs the background thread.*
 
 **A negative control that did not fail, and was right not to.** I broke a
 transform on purpose and the round trip still reported 100%, which looked like
@@ -835,6 +853,98 @@ explaining what that means.
 needed rather than where it belonged. The README would have carried a claim of
 100% next to a UI drawing a red mark on a value that was fine - and the UI
 would have been the thing people believed.
+
+---
+
+## An iterator released its refcounts without the DB mutex       2026-08-16
+
+**Symptom.** None from the test suite: 418 tests green, clean under ASan and
+clean under UBSan. It was found by reading the code, and then confirmed by
+building a ThreadSanitizer target and pointing it at reader threads.
+
+**Root cause.** `DBImpl::NewIterator` pins the current Version and both
+memtables so a concurrent compaction cannot delete files or free arenas the scan
+is still reading. It released them like this:
+
+```cpp
+current->Ref();
+merged->RegisterCleanup(
+    [](void* v, void*) { reinterpret_cast<Version*>(v)->Unref(); }, current, nullptr);
+mem_->Ref();
+merged->RegisterCleanup(
+    [](void* m, void*) { reinterpret_cast<MemTable*>(m)->Unref(); }, mem_, nullptr);
+```
+
+It reads as the natural mirror of the `Ref()` calls above it, and that symmetry
+is the trap. The `Ref()`s happen inside `NewIterator`, which holds `mutex_`. The
+`Unref()`s happen when the ITERATOR IS DESTROYED - on whatever thread owns it,
+at whatever moment it goes out of scope, with no lock held, while the background
+compaction thread is running.
+
+Three distinct races:
+
+1. `refs_` is a plain `int` on both `Version` and `MemTable`. Two threads doing
+   `--refs_` is a data race, and the compaction thread touches version
+   refcounts constantly.
+2. `~Version()` unlinks itself from the VersionSet's doubly-linked list -
+   `prev_->next_ = next_; next_->prev_ = prev_;` - which is VersionSet state.
+   Corrupting it while `AppendVersion` or a compaction walks the list is how
+   the use-after-free actually happens.
+3. `~Version()` then runs `if (--f->refs == 0) delete f` over every
+   `FileMetaData`. Those are shared between versions: a second unsynchronised
+   refcount, and a double free.
+
+Reverting the fix and running the new `test_concurrency` under TSan gives **51
+warnings**, including `heap-use-after-free` in `Slice::compare` and
+`GetVarint32Ptr`, races in `Version::Ref`, `Version::Unref`, `~Version` at all
+three of the lines above, `MemTable::Ref`, `MemTable::Unref`, `Arena::~Arena`
+and `VersionSet::Builder::MaybeAddFile`. The process aborts.
+
+**Fix.** One cleanup, one state object, and the mutex is taken before any
+`Unref`:
+
+```cpp
+struct IterState { std::mutex* mu; MemTable* mem; MemTable* imm; Version* version; };
+auto* state = new IterState{&mutex_, mem_, imm_, current};
+merged->RegisterCleanup([](void* arg1, void*) {
+  auto* s = static_cast<IterState*>(arg1);
+  { std::lock_guard<std::mutex> guard(*s->mu);
+    s->mem->Unref();
+    if (s->imm != nullptr) s->imm->Unref();
+    s->version->Unref(); }
+  delete s;
+}, state, nullptr);
+```
+
+This is what LevelDB's `CleanupIteratorState` does, and the reason is the one
+above rather than convention.
+
+**And two more the same session.** With the TSan target built, it immediately
+flagged `TableCache::filter_rejections_` and `Table::Rep::filter_rejections` -
+plain `uint64_t` counters incremented from `TableCache::Get`, which runs with
+the mutex deliberately released so several readers can be in it at once.
+
+Those are only statistics, and the tempting response is to shrug: the count
+would be approximately right and nothing decides anything on it. That reasoning
+does not survive contact with the standard. A non-atomic read-modify-write from
+two threads is undefined behaviour, and UB is not "the number is slightly off" -
+it is "the compiler may assume this never happens", which entitles it to cache
+the variable in a register across a loop. Both are now `std::atomic<uint64_t>`
+with relaxed ordering, which on x86 compiles to the same instruction the racy
+version did.
+
+**Lesson.** Two of them, and the second is the more useful.
+
+The narrow one: a refcount acquired under a lock has to be released under the
+same lock, and a cleanup callback is the place where that stops being obvious,
+because the acquire and the release are in different functions on different
+threads at different times.
+
+The broader one: **415 passing tests, ASan and UBSan told me nothing here.**
+None of them exercised the shape the bug lives in - a background thread mutating
+structures that reader threads walk. The gap was not in the assertions, it was
+in what the suite ran at all. `tests/lsm/test_concurrency.cpp` and a
+`SEXTANT_TSAN` build now exist so the shape is covered rather than assumed.
 
 ---
 

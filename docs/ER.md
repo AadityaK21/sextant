@@ -343,7 +343,7 @@ rejected values are stored rather than discarded.
 
 ## 9. Known limitations
 
-**Records are held in memory during resolution.** At 459 records that is a few
+**Records are held in memory during resolution.** At 1,451 records that is a few
 megabytes and it is what makes the tuner's inner loop feasible. At the full
 UN/LOCODE scale it would have to stream, and the tuner would have to work from
 cached feature vectors on disk. This is a real limit, not a detail.

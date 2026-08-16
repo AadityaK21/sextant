@@ -26,7 +26,7 @@ interesting part.
 | ✅ | **Frontend** navigates links, opens lineage, shows rejected alternatives, and renders the query plan and its cost. |
 | ⚠️ | **Demo** is a generated terminal transcript, not a UI recording. See the note below. |
 | ✅ | **Seven ADRs**, covering the decisions worth arguing about. |
-| ✅ | **CI green** - 415 tests on Linux, Windows and macOS, plus a clean run under ASan and UBSan. |
+| ✅ | **CI green** - 418 tests on Linux, Windows and macOS, plus clean runs under ASan, UBSan and ThreadSanitizer. |
 
 ### The two marked ⚠️
 
@@ -54,8 +54,23 @@ frame by frame would be a drawing of the frontend rather than a recording of one
 | SSTable build and read, flush to L0 | 98 tests |
 | Bloom filters, block cache, merging iterator | 132 tests |
 | VersionSet, MANIFEST, leveled compaction | 145 tests |
+| Crash recovery at 50 truncation points, 10⁶-op differential, TSan concurrency | 418 tests |
 
-Written from scratch: no LevelDB, no RocksDB, no embedded database of any kind.
+**The concurrency tests came last, and they should not have.** A code review
+found that iterator cleanup released its pinned Version and memtables without
+the DB mutex - three races, including a use-after-free. 415 tests, ASan and
+UBSan had all passed. Nothing in the suite ran reader threads against the
+background compaction thread, so the whole shape was uncovered. `SEXTANT_TSAN`
+and `tests/lsm/test_concurrency.cpp` exist because of it; the write-up is in
+[`BUGS.md`](BUGS.md).
+
+Written from scratch in the sense that matters for a build - there is no
+LevelDB, RocksDB or embedded database anywhere in the dependency tree - but
+**this is a reimplementation of LevelDB's design, not an original one.** The
+architecture is theirs: the WAL record format, the internal key layout, the
+memtable-and-levels split, the version and MANIFEST scheme, the compaction
+picker. The skiplist in particular is close to a port. See the note in the
+README.
 
 The read path is the part worth measuring. Adding SSTables made reads slower;
 bloom filters and per-file key ranges made them fast again. Both directions are
