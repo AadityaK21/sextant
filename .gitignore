@@ -46,3 +46,6 @@ web/dist/
 .idea/
 .DS_Store
 web/*.tsbuildinfo
+
+# scratch render used to eyeball docs/demo.svg
+docs/_demo_check.png

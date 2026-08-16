@@ -27,5 +27,38 @@ services:
       timeout: 5s
       retries: 10
 
+  # The whole thing: ingest, resolve, verify, then serve the API and the UI.
+  #
+  # First start takes a few minutes, most of it compiling the C++. After that
+  # the database is on a volume and a restart goes straight to serving - see
+  # docker/entrypoint.sh for the marker-file guard.
+  #
+  # Postgres is deliberately NOT a hard dependency. The Postgres connector is
+  # optional by design (see cmake/Dependencies.cmake): the committed CSV and
+  # JSON snapshots are enough to ingest, resolve and demonstrate everything,
+  # and making the app wait on a database it may not use would turn an optional
+  # component into a required one.
+  sextant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sextant
+    ports:
+      - "8080:8080"
+    volumes:
+      - sextantdb:/app/sextant-db
+    environment:
+      SEXTANT_PORT: 8080
+      # Set to 1 to re-ingest and re-resolve on start. Safe to repeat:
+      # resolution clears its own derived keyspaces first.
+      SEXTANT_FORCE_RESOLVE: 0
+    healthcheck:
+      test: ["CMD-SHELL", "sextant schema --schema /app/schema > /dev/null"]
+      interval: 15s
+      timeout: 10s
+      start_period: 180s
+      retries: 5
+
 volumes:
   pgdata:
+  sextantdb:
